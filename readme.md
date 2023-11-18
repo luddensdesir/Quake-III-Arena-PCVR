@@ -1,1 +1,4 @@
-A VR Quake 3 Arena 1.32 mod that combines the speed of Quake 1, multiplayer, non-linear objectives of Wolfenstein: Enemy Territory, and realistic item/weapon handling of Arma
+Virtual Reality mod for Quake 3 Arena:
+  
+[<img src="https://img.youtube.com/vi/Xm1VAXDd-Bc/hqdefault.jpg" width="600" height="300"
+/>](https://www.youtube.com/embed/Xm1VAXDd-Bc)
