@@ -121,9 +121,7 @@ static void CG_ClipMoveToEntities ( const vec3_t start, const vec3_t mins, const
 			VectorCopy( cent->lerpOrigin, origin );
 		}
 
-
-		trap_CM_TransformedBoxTrace ( &trace, start, end,
-			mins, maxs, cmodel,  mask, origin, angles);
+		trap_CM_TransformedBoxTrace ( &trace, start, end, mins, maxs, cmodel,  mask, origin, angles);
 
 		if (trace.allsolid || trace.fraction < tr->fraction) {
 			trace.entityNum = ent->number;
@@ -136,6 +134,30 @@ static void CG_ClipMoveToEntities ( const vec3_t start, const vec3_t mins, const
 		}
 	}
 }
+
+/*
+================
+CG_Trace
+================
+*/
+
+
+void	CG_PlayerTrace( trace_t *result, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int skipNumber, int mask, vec3_t * body, const vec3_t origin, const vec3_t viewangles) {
+
+	trace_t	t;
+
+	//trap_CM_TransformedPlayerBoxTrace ( &t, start, end, mins, maxs, 0, mask, body, origin, viewangles);
+	trap_CM_BoxTrace ( &t, start, end, mins, maxs, 0, mask);
+	//trap_CM_TracePlayer( &t, start, end, mins, maxs, 0, mask, body);
+
+	t.entityNum = t.fraction != 1.0 ? ENTITYNUM_WORLD : ENTITYNUM_NONE;
+
+	// check all other solid models
+	CG_ClipMoveToEntities (start, mins, maxs, end, skipNumber, mask, &t);
+
+	*result = t;
+}
+
 
 /*
 ================
@@ -221,7 +243,7 @@ static void CG_InterpolatePlayerState( qboolean grabAngles ) {
 		cmdNum = trap_GetCurrentCmdNumber();
 		trap_GetUserCmd( cmdNum, &cmd );
 
-		PM_UpdateViewAngles( out, &cmd );
+		PM_UpdateArticulatedAngles( out, &cmd );
 	}
 
 	// if the next frame is a teleport, we can't lerp to it
@@ -443,7 +465,8 @@ void CG_PredictPlayerState( void ) {
 
 	// prepare for pmove
 	cg_pmove.ps = &cg.predictedPlayerState;
-	cg_pmove.trace = CG_Trace;
+	//cg_pmove.trace = CG_Trace;
+	cg_pmove.trace = CG_PlayerTrace;
 	cg_pmove.pointcontents = CG_PointContents;
 	if ( cg_pmove.ps->pm_type == PM_DEAD ) {
 		cg_pmove.tracemask = MASK_PLAYERSOLID & ~CONTENTS_BODY;
@@ -506,7 +529,7 @@ void CG_PredictPlayerState( void ) {
 		trap_GetUserCmd( cmdNum, &cg_pmove.cmd );
 
 		if ( cg_pmove.pmove_fixed ) {
-			PM_UpdateViewAngles( cg_pmove.ps, &cg_pmove.cmd );
+			PM_UpdateArticulatedAngles( cg_pmove.ps, &cg_pmove.cmd );
 		}
 
 		// don't do anything if the time is before the snapshot player time
@@ -580,8 +603,16 @@ void CG_PredictPlayerState( void ) {
 		if ( cg_pmove.pmove_fixed ) {
 			cg_pmove.cmd.serverTime = ((cg_pmove.cmd.serverTime + pmove_msec.integer-1) / pmove_msec.integer) * pmove_msec.integer;
 		}
-
+		cg_pmove.ps->module = 1;
 		Pmove (&cg_pmove);
+
+		//cg.snap->ps.hmdAngles[0] = cg_pmove.cmd.hangles[0] * .000001;
+		//cg.snap->ps.hmdAngles[1] = cg_pmove.cmd.hangles[1] * .000001;
+		//cg.snap->ps.hmdAngles[2] = cg_pmove.cmd.hangles[2] * .000001;
+		//cg.snap->ps.hmdAngles[3] = cg_pmove.cmd.hangles[3] * .000001;
+
+		//Com_Printf(" %f, %f, %f, %f\n",	cg.snap->ps.hmdAngles[0], cg.snap->ps.hmdAngles[1], cg.snap->ps.hmdAngles[2], cg.snap->ps.hmdAngles[3]);
+		//Com_Printf(" %i, %i, %i, %i\n", cg_pmove.cmd.hangles[0], cg_pmove.cmd.hangles[1], cg_pmove.cmd.hangles[2], cg_pmove.cmd.hangles[3]);
 
 		moved = qtrue;
 

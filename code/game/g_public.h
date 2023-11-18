@@ -178,6 +178,7 @@ typedef enum {
 
 	G_TRACE,	// ( trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentmask );
 	// collision detection against all linked entities
+	G_PLAYERTRACE,
 
 	G_POINT_CONTENTS,	// ( const vec3_t point, int passEntityNum );
 	// point contents against all linked entities

@@ -46,9 +46,16 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define	VOTE_TIME			30000	// 30 seconds before vote times out
 
-#define	MINS_Z				-24
-#define	DEFAULT_VIEWHEIGHT	26
-#define CROUCH_VIEWHEIGHT	12
+//only box info sent to xreal
+#define	MINS_Z				-28
+
+#define	BOX_HEIGHT 28//zcm
+#define	BOX_GIRTH  15//zcm
+
+#define	DEFAULT_VIEWHEIGHT	26//zcm
+#define	DEFAULT_VIEWFORWARD	26//zcm
+//#define	DEFAULT_VIEWHEIGHT	22 
+#define CROUCH_VIEWHEIGHT	8//zcm
 #define	DEAD_VIEWHEIGHT		-16
 
 //
@@ -106,6 +113,7 @@ typedef enum {
 	GT_1FCTF,
 	GT_OBELISK,
 	GT_HARVESTER,
+	//GT_WWC,
 	GT_MAX_GAME_TYPE
 } gametype_t;
 
@@ -139,9 +147,15 @@ typedef enum {
 	WEAPON_FIRING
 } weaponstate_t;
 
+typedef enum {
+	WEAPON_NORMAL, 
+	WEAPON_SHOULDERED, 
+} weaponhandling_t;
+
 // pmove->pm_flags
 #define	PMF_DUCKED			1
 #define	PMF_JUMP_HELD		2
+#define	PMF_SPRINT			4		
 #define	PMF_BACKWARDS_JUMP	8		// go into backwards land
 #define	PMF_BACKWARDS_RUN	16		// coast down to backwards run
 #define	PMF_TIME_LAND		32		// pm_time is time before rejump
@@ -153,10 +167,72 @@ typedef enum {
 #define PMF_FOLLOW			4096	// spectate following another player
 #define PMF_SCOREBOARD		8192	// spectate as a scoreboard
 #define PMF_INVULEXPAND		16384	// invulnerability sphere set to full size
+#define PMF_GRAPPLE_PULL_TARZAN	32768	// pull towards grapple location
 
-#define	PMF_ALL_TIMES	(PMF_TIME_WATERJUMP|PMF_TIME_LAND|PMF_TIME_KNOCKBACK)
+// ps->pm_weapFlags
+#define PWF_WEAPONRIGHT			1	// zcm
+#define PWF_WEAPONLEFT			2
+#define PWF_WEAPONUP		4
+#define PWF_VIEWUNLOCK		8
+#define PWF_PARENTSWITCH		16
+#define PWF_GAPUP		32
+#define PWF_GAPDOWN			64
+
+#define	PMF_ALL_TIMES	(PMF_TIME_WATERJUMP|PMF_TIME_LAND|PMF_TIME_KNOCKBACK|PMF_GRAPPLE_PULL_TARZAN)
 
 #define	MAXTOUCH	32
+
+enum {
+
+	BOT_FL,
+	BOT_FR,
+	BOT_RL,
+	BOT_RR,
+
+	TOP_FL,
+	TOP_FR,
+	TOP_RL,
+	TOP_RR,
+	
+	TOTAL_COLLISION_POINTS
+
+} boundingBoxPoints;
+
+typedef struct{
+	vec3_t	points[TOTAL_COLLISION_POINTS];
+} playerBox;
+
+#if GRAPPLE_ROPE	// JUHOX: global definitions
+#define GRAPPLE_PULL_SPEED_CLASSIC	800.0f
+#define GRAPPLE_PULL_SPEED_TOOL		400.0f
+#define GRAPPLE_PULL_SPEED_ANCHOR	400.0f
+#define GRAPPLE_PULL_SPEED_COMBAT	800.0f
+#define MAX_ROPE_ELEMENTS 160		// needs to be divisable by 8
+#define ROPE_ELEMENT_SIZE 10.0f
+
+typedef enum {
+	HM_disabled,
+	HM_classic,
+	HM_tool,
+	HM_anchor,
+	HM_combat,
+
+	HM_num_modes
+} hookMode_t;
+#endif
+
+#if GRAPPLE_ROPE
+typedef enum {
+	GST_unused,	// silent
+	GST_silent,	// silent
+	GST_fixed,	// silent
+	GST_windoff,
+	GST_rewind,
+	GST_pulling,
+	GST_blocked
+} grappleState_t;
+#endif
+
 typedef struct {
 	// state (in / out)
 	playerState_t	*ps;
@@ -176,24 +252,41 @@ typedef struct {
 
 	vec3_t		mins, maxs;			// bounding box size
 
+	//zcm
+	playerBox	body;				//zcm 
+	vec2_t		weapViewGap;
+	float		dist;	//NEED TO GET RID OF THIS
+	//zcm
+
 	int			watertype;
 	int			waterlevel;
 
 	float		xyspeed;
-
 	// for fixed msec Pmove
 	int			pmove_fixed;
 	int			pmove_msec;
-
 	// callbacks to test the world
 	// these will be different functions during game and cgame
-	void		(*trace)( trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentMask );
+	//not sent to etxreal
+	//void		(*trace)( trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentMask );
+	void		(*trace)( trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentMask, vec3_t * body, vec3_t origin, vec3_t viewAngles);
 	int			(*pointcontents)( const vec3_t point, int passEntityNum );
+
 } pmove_t;
 
 // if a full pmove isn't done on the client, you can just update the angles
-void PM_UpdateViewAngles( playerState_t *ps, const usercmd_t *cmd );
+//void PM_UpdateViewAngles( playerState_t *ps, const usercmd_t *cmd );
+void PM_UpdateArticulatedAngles( playerState_t *ps, const usercmd_t *cmd );
 void Pmove (pmove_t *pmove);
+
+#define SWAY_PITCH_AMPLITUDE        0.13f //ZCM
+#define SWAY_PITCH_FREQUENCY        0.24f
+#define SWAY_PITCH_MIN_AMPLITUDE    0.1f        
+
+#define SWAY_YAW_AMPLITUDE          0.7f
+#define SWAY_YAW_FREQUENCY          0.12f
+#define SWAY_YAW_MIN_AMPLITUDE      0.2f
+
 
 //===================================================================================
 
@@ -209,8 +302,10 @@ typedef enum {
 	STAT_WEAPONS,					// 16 bit fields
 	STAT_ARMOR,				
 	STAT_DEAD_YAW,					// look this direction when dead (FIXME: get rid of?)
+	STAT_GRAPPLEPULL,
 	STAT_CLIENTS_READY,				// bit mask of clients wishing to exit the intermission (FIXME: configstring?)
-	STAT_MAX_HEALTH					// health / armor limit, changable by handicap
+	STAT_MAX_HEALTH,					// health / armor limit, changable by handicap
+	STAT_JUMPTIME
 } statIndex_t;
 
 
@@ -412,6 +507,9 @@ typedef enum {
 	EV_MISSILE_MISS,
 	EV_MISSILE_MISS_METAL,
 	EV_RAILTRAIL,
+	
+	EV_HITBOX, // ZCM
+
 	EV_SHOTGUN,
 	EV_BULLET,				// otherEntity is the shooter
 
@@ -492,6 +590,8 @@ typedef enum {
 	LEGS_WALKCR,
 	LEGS_WALK,
 	LEGS_RUN,
+	//LEGS_SPRINT_L,
+	//LEGS_SPRINT_R,
 	LEGS_BACK,
 	LEGS_SWIM,
 
@@ -736,3 +836,9 @@ qboolean	BG_PlayerTouchesItem( playerState_t *ps, entityState_t *item, int atTim
 #define KAMI_BOOMSPHERE_MAXRADIUS		720
 #define KAMI_SHOCKWAVE2_MAXRADIUS		704
 
+
+//ZCM attempt to send some of this info to cg_draw.c
+// This should only be enabled when I set it up the old way
+// But this should absolutely not be the finished setup
+extern	pmove_t		*pm;
+//extern	pml_t		pml;

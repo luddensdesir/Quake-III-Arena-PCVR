@@ -136,7 +136,7 @@ struct gentity_s {
 	void		(*touch)(gentity_t *self, gentity_t *other, trace_t *trace);
 	void		(*use)(gentity_t *self, gentity_t *other, gentity_t *activator);
 	void		(*pain)(gentity_t *self, gentity_t *attacker, int damage);
-	void		(*die)(gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod);
+	void		(*die)(gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int mod, vec3_t dir, vec3_t point);
 
 	int			pain_debounce_time;
 	int			fly_sound_debounce_time;	// wind tunnel
@@ -255,6 +255,12 @@ typedef struct {
 } clientPersistant_t;
 
 
+
+typedef struct {
+	vec3_t pos;
+	vec3_t velocity;
+	qboolean touch;
+} ropeElement_t;
 // this structure is cleared on each ClientSpawn(),
 // except for 'client->pers' and 'client->sess'
 struct gclient_s {
@@ -714,7 +720,14 @@ extern	gentity_t		g_entities[MAX_GENTITIES];
 
 #define	FOFS(x) ((int)&(((gentity_t *)0)->x))
 
+extern	vmCvar_t	g_allowGrapple;
+extern	vmCvar_t	g_grappleSpeed;
+extern	vmCvar_t	g_grapplePull;
+
 extern	vmCvar_t	g_gametype;
+
+extern	vmCvar_t	g_pro_mode; // CPM: The overall CPM toggle
+
 extern	vmCvar_t	g_dedicated;
 extern	vmCvar_t	g_cheats;
 extern	vmCvar_t	g_maxclients;			// allow this many total, including spectators
@@ -794,6 +807,7 @@ void	trap_SetUserinfo( int num, const char *buffer );
 void	trap_GetServerinfo( char *buffer, int bufferSize );
 void	trap_SetBrushModel( gentity_t *ent, const char *name );
 void	trap_Trace( trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentmask );
+void	trap_PlayerTrace( trace_t *results, const vec3_t start, const vec3_t mins, const vec3_t maxs, const vec3_t end, int passEntityNum, int contentmask, vec3_t * body, vec3_t origin, vec3_t angles );
 int		trap_PointContents( const vec3_t point, int passEntityNum );
 qboolean trap_InPVS( const vec3_t p1, const vec3_t p2 );
 qboolean trap_InPVSIgnorePortals( const vec3_t p1, const vec3_t p2 );

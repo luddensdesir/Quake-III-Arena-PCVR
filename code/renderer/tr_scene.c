@@ -287,7 +287,18 @@ to handle mirrors,
 */
 void RE_RenderScene( const refdef_t *fd ) {
 	viewParms_t		parms;
+	//viewParms_t		parms2;
 	int				startTime;
+	//vec3_t vec;
+	//vec3_t rEye;
+	//vec3_t lEye;
+	//int stereo;
+	//float eyeDist;
+	//VectorClear(vec);
+	//VectorClear(rEye);
+	//VectorClear(lEye);
+	//eyeDist = 0;
+	//stereo = 0;
 
 	if ( !tr.registered ) {
 		return;
@@ -317,13 +328,15 @@ void RE_RenderScene( const refdef_t *fd ) {
 	VectorCopy( fd->viewaxis[0], tr.refdef.viewaxis[0] );
 	VectorCopy( fd->viewaxis[1], tr.refdef.viewaxis[1] );
 	VectorCopy( fd->viewaxis[2], tr.refdef.viewaxis[2] );
+	//tr.refdef.x = fd->width/2;
+	//tr.refdef.width = fd->width/2;
 
 	tr.refdef.time = fd->time;
 	tr.refdef.rdflags = fd->rdflags;
 
 	// copy the areamask data over and note if it has changed, which
 	// will force a reset of the visible leafs even if the view hasn't moved
-	tr.refdef.areamaskModified = qfalse;
+	tr.refdef.areamaskModified = qfalse;					
 	if ( ! (tr.refdef.rdflags & RDF_NOWORLDMODEL) ) {
 		int		areaDiff;
 		int		i;
@@ -381,10 +394,28 @@ void RE_RenderScene( const refdef_t *fd ) {
 	// convert to GL's 0-at-the-bottom space
 	//
 	Com_Memset( &parms, 0, sizeof( parms ) );
+	//Com_Memset( &parms2, 0, sizeof( parms2 ) );
 	parms.viewportX = tr.refdef.x;
 	parms.viewportY = glConfig.vidHeight - ( tr.refdef.y + tr.refdef.height );
 	parms.viewportWidth = tr.refdef.width;
-	parms.viewportHeight = tr.refdef.height;
+
+	//stereo = 1;
+	//stereo = 0;
+
+	//if(!CheckEyeInt()){
+	//	InitEyeInfo( tr.refdef.width, tr.refdef.height, 0);
+	//}
+
+	//if(stereo){
+	//	parms.viewportWidth = tr.refdef.width/2;
+		parms.viewportHeight = tr.refdef.height;
+	//	eyeDist = 7.5;
+	//} else {
+	//	eyeDist = 0;
+	//	parms.viewportWidth = tr.refdef.width;
+	//	parms.viewportHeight = tr.refdef.height;
+	//}
+
 	parms.isPortal = qfalse;
 
 	parms.fovX = tr.refdef.fov_x;
@@ -395,9 +426,54 @@ void RE_RenderScene( const refdef_t *fd ) {
 	VectorCopy( fd->viewaxis[1], parms.or.axis[1] );
 	VectorCopy( fd->viewaxis[2], parms.or.axis[2] );
 
-	VectorCopy( fd->vieworg, parms.pvsOrigin );
+	/*VectorCopy( fd->vieworg,  lEye );
+	VectorCopy( fd->vieworg,  rEye );
+	VectorMA( rEye, 0, parms.or.axis[0], rEye);
+	VectorMA( rEye, -eyeDist * .5, parms.or.axis[1],rEye);
+	VectorMA( rEye, 0, parms.or.axis[2], rEye);
 
-	R_RenderView( &parms );
+	VectorMA( lEye, 0, parms.or.axis[0], lEye);
+	VectorMA( lEye, eyeDist * .5, parms.or.axis[1], lEye);
+	VectorMA( lEye, 0, parms.or.axis[2], lEye);
+	VectorCopy( lEye,  parms.or.origin );*/
+	VectorCopy( fd->vieworg, parms.pvsOrigin );
+	
+	/*if(stereo){
+		parms2 = parms; 
+		parms2.viewportWidth = tr.refdef.width/2;
+		parms2.viewportX = tr.refdef.x + tr.refdef.width/2;
+		VectorCopy( rEye,  parms2.or.origin );
+
+		R_RenderView( &parms );
+		R_RenderView( &parms2 );
+	} else {*/
+		R_RenderView( &parms ); 
+	/*}
+
+	// Render Scene to Eye Buffers
+	for (int eye = 0; eye < 2; eye++)
+	{
+		// Get view and projection matrices for the Rift camera
+		//vec3_t pos = originPos + originRot.Transform(layer.RenderPose[eye].Position);
+		//vec4_t[4] rot = originRot * Matrix4f(layer.RenderPose[eye].Orientation);
+
+		//vec3_t finalUp      = rot.Transform(Vector3f(0, 1, 0));
+		//vec3_t finalForward = rot.Transform(Vector3f(0, 0, -1));
+		//vec4_t[4] view         = Matrix4f::LookAtRH(pos, pos + finalForward, finalUp); 
+		//vec4_t[4] proj = ovrMatrix4f_Projection(layer.Fov[eye], 0.2f, 1000.0f, 0);
+		// Render the scene for this eye.
+		//DIRECTX.SetViewport(layer.Viewport[eye]);
+		//roomScene.Render(proj * view, 1, 1, 1, 1, true);
+	}
+
+	if(CreateSwapChain() == ovrSuccess){
+		unsigned int texId = HandleSwapChain();
+		qglBindTexture(GL_TEXTURE_2D, texId);
+
+		SubmitSwapChain();
+	}
+
+	DestroyOVRSession();*/
 
 	// the next scene rendered in this frame will tack on after this one
 	r_firstSceneDrawSurf = tr.refdef.numDrawSurfs;

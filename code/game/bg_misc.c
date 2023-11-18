@@ -1227,6 +1227,7 @@ void BG_EvaluateTrajectory( const trajectory_t *tr, int atTime, vec3_t result ) 
 		deltaTime = ( atTime - tr->trTime ) * 0.001;	// milliseconds to seconds
 		VectorMA( tr->trBase, deltaTime, tr->trDelta, result );
 		result[2] -= 0.5 * DEFAULT_GRAVITY * deltaTime * deltaTime;		// FIXME: local gravity...
+		//Com_Printf("%f", g_gravity);
 		break;
 	default:
 		Com_Error( ERR_DROP, "BG_EvaluateTrajectory: unknown trType: %i", tr->trTime );
@@ -1469,7 +1470,8 @@ void BG_PlayerStateToEntityState( playerState_t *ps, entityState_t *s, qboolean 
 	s->number = ps->clientNum;
 
 	s->pos.trType = TR_INTERPOLATE;
-	VectorCopy( ps->origin, s->pos.trBase );
+	VectorCopy( ps->origin, s->pos.trBase ); //player model follows ps->origin
+	s->pos.trBase[2] -=4; //player model follows ps->origin //zcm DOESN'T AFFECT ANYONE OTHER THAN LAN PLAYER
 	if ( snap ) {
 		SnapVector( s->pos.trBase );
 	}
@@ -1545,7 +1547,8 @@ void BG_PlayerStateToEntityStateExtraPolate( playerState_t *ps, entityState_t *s
 	s->number = ps->clientNum;
 
 	s->pos.trType = TR_LINEAR_STOP;
-	VectorCopy( ps->origin, s->pos.trBase );
+	VectorCopy( ps->origin, s->pos.trBase ); //player model follows ps->origin
+	s->pos.trBase[2] -= 4; //player model follows ps->origin //zcm entities that are not local sever entities
 	if ( snap ) {
 		SnapVector( s->pos.trBase );
 	}

@@ -158,9 +158,9 @@ static void CG_AddTestModel (void) {
 
 		// allow the position to be adjusted
 		for (i=0 ; i<3 ; i++) {
-			cg.testModelEntity.origin[i] += cg.refdef.viewaxis[0][i] * cg_gun_x.value;
-			cg.testModelEntity.origin[i] += cg.refdef.viewaxis[1][i] * cg_gun_y.value;
-			cg.testModelEntity.origin[i] += cg.refdef.viewaxis[2][i] * cg_gun_z.value;
+			cg.testModelEntity.origin[i] += cg.refdef.viewaxis[0][i] * gun_x.value;
+			cg.testModelEntity.origin[i] += cg.refdef.viewaxis[1][i] * gun_y.value;
+			cg.testModelEntity.origin[i] += cg.refdef.viewaxis[2][i] * gun_z.value;
 		}
 	}
 
@@ -229,7 +229,7 @@ static void CG_OffsetThirdPersonView( void ) {
 	float		focusDist;
 	float		forwardScale, sideScale;
 
-	cg.refdef.vieworg[2] += cg.predictedPlayerState.viewheight;
+	cg.refdef.vieworg[2] += cg.predictedPlayerState.viewPos[1];
 
 	VectorCopy( cg.refdefViewAngles, focusAngles );
 
@@ -318,20 +318,35 @@ static void CG_OffsetFirstPersonView( void ) {
 	float			f;
 	vec3_t			predictedVelocity;
 	int				timeDelta;
+	float			scale;
 	
 	if ( cg.snap->ps.pm_type == PM_INTERMISSION ) {
 		return;
 	}
-
+	 
 	origin = cg.refdef.vieworg;
 	angles = cg.refdefViewAngles;
+
+
+	//velAddAngles;
+	//turnAddAngles;
+
+	//Com_Printf( "%f  %f  %f\n", cg.snap->ps.velocity[0], cg.snap->ps.velocity[1], cg.snap->ps.velocity[2] );
+	//Com_Printf( "%f  %f  %f\n", cg.velAddAngles[0], cg.velAddAngles[1], cg.velAddAngles[2] );
+
+	//need a two eyed vs one eyed shooting option
+	//need a two eyed vs one eyed shooting option
+	//need a two eyed vs one eyed shooting option
+	VectorAdd(cg.snap->ps.hmdAngles, cg.refdefViewAngles, angles);
+
+	//Com_Printf(" %f, %f, %f, %f\n",	cg.snap->ps.hmdAngles[0], cg.snap->ps.hmdAngles[1], cg.snap->ps.hmdAngles[2], cg.snap->ps.hmdAngles[3]);
 
 	// if dead, fix the angle and don't add any kick
 	if ( cg.snap->ps.stats[STAT_HEALTH] <= 0 ) {
 		angles[ROLL] = 40;
 		angles[PITCH] = -15;
 		angles[YAW] = cg.snap->ps.stats[STAT_DEAD_YAW];
-		origin[2] += cg.predictedPlayerState.viewheight;
+		origin[2] += cg.predictedPlayerState.viewPos[1];
 		return;
 	}
 
@@ -390,14 +405,31 @@ static void CG_OffsetFirstPersonView( void ) {
 //===================================
 
 	// add view height
-	origin[2] += cg.predictedPlayerState.viewheight;
+	origin[2] += cg.predictedPlayerState.viewPos[1];
 
 	// smooth out duck height changes
+	//this is probably better than lerping and saving in playerstate;
 	timeDelta = cg.time - cg.duckTime;
+	//timeDelta/DUCK_TIME = scale;
+	scale = 100*timeDelta/DUCK_TIME;
+	scale /= 100;
 	if ( timeDelta < DUCK_TIME) {
+		//Com_Printf("%f\n",scale * DUCK_TIME);
+		Com_Printf("%f\n",scale );
 		cg.refdef.vieworg[2] -= cg.duckChange 
-			* (DUCK_TIME - timeDelta) / DUCK_TIME;
+			* (DUCK_TIME - (timeDelta)) / DUCK_TIME;
 	}
+
+	//CHECK PMF_SPRINT IN cg.snap
+
+	if(cg.snap->ps.pm_flags & PMF_SPRINT ){
+		VectorClear(angles);
+	}
+	
+
+	//pm->ps->weapPosSpread[0] = LerpPosition( pm->ps->weapPosSpread[0], 0, diffLerp);
+	//timedeltas might be better than storing a ton of 
+
 
 	// add bob height
 	bob = cg.bobfracsin * cg.xyspeed * cg_bobup.value;
@@ -407,17 +439,16 @@ static void CG_OffsetFirstPersonView( void ) {
 
 	origin[2] += bob;
 
-
 	// add fall height
-	delta = cg.time - cg.landTime;
-	if ( delta < LAND_DEFLECT_TIME ) {
-		f = delta / LAND_DEFLECT_TIME;
-		cg.refdef.vieworg[2] += cg.landChange * f;
-	} else if ( delta < LAND_DEFLECT_TIME + LAND_RETURN_TIME ) {
-		delta -= LAND_DEFLECT_TIME;
-		f = 1.0 - ( delta / LAND_RETURN_TIME );
-		cg.refdef.vieworg[2] += cg.landChange * f;
-	}
+	//delta = cg.time - cg.landTime;
+	//if ( delta < LAND_DEFLECT_TIME ) {
+	//	f = delta / LAND_DEFLECT_TIME;
+	//	cg.refdef.vieworg[2] += cg.landChange * f;
+	//} else if ( delta < LAND_DEFLECT_TIME + LAND_RETURN_TIME ) {
+	//	delta -= LAND_DEFLECT_TIME;
+	//	f = 1.0 - ( delta / LAND_RETURN_TIME );
+	//	cg.refdef.vieworg[2] += cg.landChange * f;
+	//}
 
 	// add step offset
 	CG_StepOffset();
@@ -429,7 +460,7 @@ static void CG_OffsetFirstPersonView( void ) {
 	// pivot the eye based on a neck length
 #if 0
 	{
-#define	NECK_LENGTH		8
+#define	NECK_LENGTH	 8
 	vec3_t			forward, up;
  
 	cg.refdef.vieworg[2] -= NECK_LENGTH;
@@ -505,14 +536,14 @@ static int CG_CalcFov( void ) {
 		}
 
 		if ( cg.zoomed ) {
-			f = ( cg.time - cg.zoomTime ) / (float)ZOOM_TIME;
+			f = ( cg.time - cg.zoomTime ) / (float)ZOOM_TIME/2;
 			if ( f > 1.0 ) {
 				fov_x = zoomFov;
 			} else {
 				fov_x = fov_x + f * ( zoomFov - fov_x );
 			}
 		} else {
-			f = ( cg.time - cg.zoomTime ) / (float)ZOOM_TIME;
+			f = ( cg.time - cg.zoomTime ) / (float)ZOOM_TIME/2;
 			if ( f > 1.0 ) {
 				fov_x = fov_x;
 			} else {
@@ -749,6 +780,26 @@ static void CG_PlayBufferedSounds( void ) {
 	}
 }
 
+extern void CG_DebugTrail (vec3_t start, vec3_t end, vec3_t offset);
+
+void cg_drawBBox(vec3_t origin){
+	CG_DebugTrail( pm->body.points[BOT_FL], pm->body.points[BOT_FR], origin);
+	CG_DebugTrail( pm->body.points[BOT_FR], pm->body.points[BOT_RR], origin);
+	CG_DebugTrail( pm->body.points[BOT_RR], pm->body.points[BOT_RL], origin);
+	CG_DebugTrail( pm->body.points[BOT_RL], pm->body.points[BOT_FL], origin);
+
+	CG_DebugTrail( pm->body.points[BOT_FL], pm->body.points[TOP_FL], origin);
+	CG_DebugTrail( pm->body.points[BOT_FR], pm->body.points[TOP_FR], origin);
+	CG_DebugTrail( pm->body.points[BOT_RR], pm->body.points[TOP_RR], origin);
+	CG_DebugTrail( pm->body.points[BOT_RL], pm->body.points[TOP_RL], origin);
+
+	CG_DebugTrail( pm->body.points[TOP_FL], pm->body.points[TOP_FR], origin);
+	CG_DebugTrail( pm->body.points[TOP_FR], pm->body.points[TOP_RR], origin);
+	CG_DebugTrail( pm->body.points[TOP_RR], pm->body.points[TOP_RL], origin);
+	CG_DebugTrail( pm->body.points[TOP_RL], pm->body.points[TOP_FL], origin);
+}
+
+
 //=========================================================================
 
 /*
@@ -867,10 +918,18 @@ void CG_DrawActiveFrame( int serverTime, stereoFrame_t stereoView, qboolean demo
 	// actually issue the rendering calls
 	CG_DrawActive( stereoView );
 
+	if(cg_drawPlayerBBox.integer == 1){
+		//cg_drawBBox(pm->ps->origin);
+	}
+
 	if ( cg_stats.integer ) {
 		CG_Printf( "cg.clientFrame:%i\n", cg.clientFrame );
 	}
 
-
+	if(cg.predictedPlayerState.zoomed){ //zcm
+		CG_ZoomDown_f();
+	} else {
+		CG_ZoomUp_f();
+	}
 }
 

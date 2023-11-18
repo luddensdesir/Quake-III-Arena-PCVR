@@ -256,8 +256,8 @@ void Cmd_Give_f (gentity_t *ent)
 
 	if (give_all || Q_stricmp(name, "weapons") == 0)
 	{
-		ent->client->ps.stats[STAT_WEAPONS] = (1 << WP_NUM_WEAPONS) - 1 - 
-			( 1 << WP_GRAPPLING_HOOK ) - ( 1 << WP_NONE );
+		ent->client->ps.stats[STAT_WEAPONS] = (1 << WP_NUM_WEAPONS) - 1/* - 
+			( 1 << WP_GRAPPLING_HOOK ) */- ( 1 << WP_NONE ); //zcm allow grapple to be give with all weaps
 		if (!give_all)
 			return;
 	}
@@ -1566,6 +1566,31 @@ void Cmd_SetViewpos_f( gentity_t *ent ) {
 	TeleportPlayer( ent, origin, angles );
 }
 
+void Cmd_GetViewpos_f( gentity_t *ent ) {
+	vec3_t		origin, angles;
+	char		buffer[MAX_TOKEN_CHARS];
+	int			i;
+
+	if ( !g_cheats.integer ) {
+		trap_SendServerCommand( ent-g_entities, va("print \"Cheats are not enabled on this server.\n\""));
+		return;
+	}
+	if ( trap_Argc() != 3 ) {
+		trap_SendServerCommand( ent-g_entities, va("print \"usage: getviewpos \n\""));
+		return;
+	}
+
+	VectorClear( angles );
+	for ( i = 0 ; i < 3 ; i++ ) {
+		trap_Argv( i + 1, buffer, sizeof( buffer ) );
+		origin[i] = atof( buffer );
+	}
+
+	trap_Argv( 4, buffer, sizeof( buffer ) );
+	//angles[YAW] = atof( buffer );
+
+	//TeleportPlayer( ent, origin, angles );
+}
 
 
 /*
@@ -1588,6 +1613,30 @@ void Cmd_Stats_f( gentity_t *ent ) {
 	//trap_SendServerCommand( ent-g_entities, va("print \"visited %d of %d areas\n\"", n, max));
 	trap_SendServerCommand( ent-g_entities, va("print \"%d%% level coverage\n\"", n * 100 / max));
 */
+}
+
+void Cmd_Player_Sprint( gentity_t *ent ) {
+	ent->client->ps.pm_flags ^= PMF_SPRINT;
+	Com_Printf("Sprint ");
+
+	if( ent->client->ps.pm_flags & PMF_SPRINT){
+		Com_Printf("ON!!\n");
+	} else { 
+		Com_Printf("Off!\n");
+	}
+
+}
+
+void Cmd_Player_Zoomin( gentity_t *ent ) {
+	ent->client->ps.pm_weapFlags ^= PWF_WEAPONUP;
+}
+
+void Cmd_Weapon_Right( gentity_t *ent ) {
+	ent->client->ps.pm_weapFlags ^= PWF_WEAPONRIGHT;
+}
+
+void Cmd_Weapon_Left( gentity_t *ent ) { //zcm
+	ent->client->ps.pm_weapFlags ^= PWF_WEAPONLEFT;
 }
 
 /*
@@ -1696,6 +1745,14 @@ void ClientCommand( int clientNum ) {
 		Cmd_SetViewpos_f( ent );
 	else if (Q_stricmp (cmd, "stats") == 0)
 		Cmd_Stats_f( ent );
+	//else if (Q_stricmp (cmd, "sprint") == 0)
+	//	Cmd_Player_Sprint( ent );
+	//else if (Q_stricmp (cmd, "zoom") == 0) // commands like these could flood servers so i would need to find a way to do it like +zoom
+	//	Cmd_Player_Zoomin( ent );  
+	else if (Q_stricmp (cmd, "weaponright") == 0) // commands like these could flood servers so i would need to find a way to do it like +zoom
+		Cmd_Weapon_Right( ent );  
+	else if (Q_stricmp (cmd, "weaponleft") == 0) // commands like these could flood servers so i would need to find a way to do it like +zoom
+		Cmd_Weapon_Left( ent );
 	else
 		trap_SendServerCommand( clientNum, va("print \"unknown cmd %s\n\"", cmd ) );
 }

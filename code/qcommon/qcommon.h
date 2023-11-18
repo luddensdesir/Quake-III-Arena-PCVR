@@ -839,6 +839,8 @@ void CL_CharEvent( int key );
 
 void CL_MouseEvent( int dx, int dy, int time );
 
+void CL_HMDEvent( int ax, int ay, int az, int aw, int time );
+
 void CL_JoystickEvent( int axis, int value, int time );
 
 void CL_PacketEvent( netadr_t from, msg_t *msg );
@@ -917,6 +919,7 @@ typedef enum {
 	SE_KEY,		// evValue is a key code, evValue2 is the down flag
 	SE_CHAR,	// evValue is an ascii char
 	SE_MOUSE,	// evValue and evValue2 are reletive signed x / y moves
+	SE_HMD,
 	SE_JOYSTICK_AXIS,	// evValue is an axis number and evValue2 is the current state (-127 to 127)
 	SE_CONSOLE,	// evPtr is a char*
 	SE_PACKET	// evPtr is a netadr_t followed by data bytes to evPtrLength
@@ -925,7 +928,7 @@ typedef enum {
 typedef struct {
 	int				evTime;
 	sysEventType_t	evType;
-	int				evValue, evValue2;
+	int				evValue, evValue2, evValue3, evValue4;
 	int				evPtrLength;	// bytes of data pointed to by evPtr, for journaling
 	void			*evPtr;			// this must be manually freed if not NULL
 } sysEvent_t;

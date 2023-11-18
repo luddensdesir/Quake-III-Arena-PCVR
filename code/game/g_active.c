@@ -549,6 +549,1039 @@ void ClientEvents( gentity_t *ent, int oldEventSequence ) {
 
 	if ( oldEventSequence < client->ps.eventSequence - MAX_PS_EVENTS ) {
 		oldEventSequence = client->ps.eventSequence - MAX_PS_EVENTS;
+
+/*
+==============
+JUHOX: MoveRopeElement
+
+derived from PM_SlideMove() [bg_slidemove.c]
+returns qfalse if element is in solid
+==============
+*/
+#if GRAPPLE_ROPE
+#define	MAX_CLIP_PLANES	5
+#include "bg_local.h"
+static qboolean MoveRopeElement(const vec3_t start, const vec3_t idealpos, vec3_t realpos, qboolean* touch) {
+	vec3_t		velocity;
+	static vec3_t ropeMins = {-ROPE_ELEMENT_SIZE, -ROPE_ELEMENT_SIZE, -ROPE_ELEMENT_SIZE};
+	static vec3_t ropeMaxs = {ROPE_ELEMENT_SIZE, ROPE_ELEMENT_SIZE, ROPE_ELEMENT_SIZE};
+
+	int			bumpcount, numbumps;
+	vec3_t		dir;
+	float		d;
+	int			numplanes;
+	vec3_t		planes[MAX_CLIP_PLANES];
+	vec3_t		clipVelocity;
+	int			i, j, k;
+	trace_t	trace;
+	vec3_t		end;
+	float		time_left;
+	float		into;
+
+
+
+	VectorSubtract(idealpos, start, velocity);
+	VectorCopy(start, realpos);
+	*touch = qfalse;
+	
+	numbumps = MAX_CLIP_PLANES - 1;
+
+	time_left = 1.0;	// seconds
+
+	numplanes = 0;
+
+	// never turn against original velocity
+	if (VectorNormalize2(velocity, planes[numplanes]) < 1) return qtrue;
+	numplanes++;
+
+	for (bumpcount=0; bumpcount < numbumps; bumpcount++) {
+
+		// calculate position we are trying to move to
+		VectorMA(realpos, time_left, velocity, end);
+
+		// see if we can make it there
+		trap_Trace(&trace, realpos, ropeMins, ropeMaxs, end, -1, CONTENTS_SOLID);
+
+		if (trace.allsolid) {
+			if (time_left >= 1.0) return qfalse;
+			SnapVectorTowards(realpos, start);
+			return qtrue;
+		}
+
+		if (trace.fraction > 0) {
+			// actually covered some distance
+			VectorCopy(trace.endpos, realpos);
+		}
+
+		//if (trace.fraction >= 1) return qtrue;
+		// check if we can get back!
+		if (trace.fraction >= 1) {
+			trace_t trace2;
+
+			trap_Trace(&trace2, end, ropeMins, ropeMaxs, realpos, -1, CONTENTS_SOLID);
+			if (trace2.fraction >= 1) return qtrue;
+			if (trace.allsolid) {
+				if (time_left >= 1.0) return qfalse;
+				SnapVectorTowards(realpos, start);
+				return qtrue;
+			}
+		}
+
+		*touch = qtrue;
+
+		time_left -= time_left * trace.fraction;
+
+		if (numplanes >= MAX_CLIP_PLANES) {
+			// this shouldn't really happen
+			return qtrue;
+		}
+
+		//
+		// if this is the same plane we hit before, nudge velocity
+		// out along it, which fixes some epsilon issues with
+		// non-axial planes
+		//
+		for (i = 0; i < numplanes; i++) {
+			if (DotProduct(trace.plane.normal, planes[i]) > 0.99) {
+				VectorAdd(trace.plane.normal, velocity, velocity);
+				break;
+			}
+		}
+		if (i < numplanes) {
+			continue;
+		}
+		VectorCopy(trace.plane.normal, planes[numplanes]);
+		numplanes++;
+
+		//
+		// modify velocity so it parallels all of the clip planes
+		//
+
+		// find a plane that it enters
+		for (i = 0; i < numplanes; i++) {
+			into = DotProduct(velocity, planes[i]);
+			if (into >= 0.1) {
+				continue;		// move doesn't interact with the plane
+			}
+
+			// see how hard we are hitting things
+			/*
+			if ( -into > pml.impactSpeed ) {
+				pml.impactSpeed = -into;
+			}
+			*/
+
+			// slide along the plane
+			PM_ClipVelocity(velocity, planes[i], clipVelocity, OVERCLIP);
+
+			// see if there is a second plane that the new move enters
+			for (j = 0; j < numplanes; j++) {
+				if (j == i) {
+					continue;
+				}
+				if (DotProduct(clipVelocity, planes[j]) >= 0.1) {
+					continue;		// move doesn't interact with the plane
+				}
+
+				// try clipping the move to the plane
+				PM_ClipVelocity(clipVelocity, planes[j], clipVelocity, OVERCLIP);
+
+				// see if it goes back into the first clip plane
+				if (DotProduct(clipVelocity, planes[i]) >= 0) {
+					continue;
+				}
+
+				// slide the original velocity along the crease
+				CrossProduct(planes[i], planes[j], dir);
+				VectorNormalize(dir);
+				d = DotProduct(dir, velocity);
+				VectorScale(dir, d, clipVelocity);
+
+				// see if there is a third plane the the new move enters
+				for (k = 0; k < numplanes; k++) {
+					if (k == i || k == j) {
+						continue;
+					}
+					if (DotProduct(clipVelocity, planes[k]) >= 0.1) {
+						continue;		// move doesn't interact with the plane
+					}
+
+					// stop dead at a tripple plane interaction
+					return qtrue;
+				}
+			}
+
+			// if we have fixed all interactions, try another move
+			VectorCopy(clipVelocity, velocity);
+			break;
+		}
+	}
+
+	return qtrue;
+}
+#endif
+
+/*
+==============
+JUHOX: ThinkRopeElement
+
+returns qfalse if element is in solid
+==============
+*/
+#if GRAPPLE_ROPE
+static ropeElement_t tempRope[MAX_ROPE_ELEMENTS];
+static qboolean ThinkRopeElement(gclient_t* client, int ropeElement, int phase, float dt) {
+	const ropeElement_t* srcRope;
+	const ropeElement_t* srcRE;
+	ropeElement_t* dstRE;
+	vec3_t startPos;
+	vec3_t predPos;
+	vec3_t succPos;
+	vec3_t anchorPos;
+	vec3_t velocity;
+	float dist;
+	float f;
+	vec3_t dir;
+	vec3_t idealpos;
+	vec3_t realpos;
+	float errSqr;
+
+	switch (phase) {
+	case 0:
+		srcRope = client->ropeElements;
+		dstRE = &tempRope[ropeElement];
+		break;
+	case 1:
+		srcRope = tempRope;
+		dstRE = &client->ropeElements[ropeElement];
+		break;
+	default:
+		return qfalse;
+	}
+	srcRE = &srcRope[ropeElement];
+
+	VectorCopy(client->ropeElements[ropeElement].pos, startPos);
+
+	if (ropeElement > 0) {
+		VectorCopy(srcRope[ropeElement-1].pos, predPos);
+		VectorCopy(client->ropeElements[ropeElement-1].pos, anchorPos);
+	}
+	else {
+		VectorCopy(client->hook->r.currentOrigin, predPos);
+		VectorCopy(predPos, anchorPos);
+	}
+
+	if (ropeElement < client->numRopeElements-1) {
+		VectorCopy(srcRope[ropeElement+1].pos, succPos);
+	}
+	else {
+		VectorCopy(client->ps.origin, succPos);
+	}
+
+	VectorCopy(srcRE->velocity, velocity);
+	
+	velocity[2] -= 0.5 * g_gravity.value * dt;
+	if (!srcRE->touch) {
+		velocity[0] += 0.05 * dt * crandom();
+		velocity[1] += 0.05 * dt * crandom();
+		velocity[2] += 0.05 * dt * crandom();
+	}
+
+	VectorSubtract(succPos, srcRE->pos, dir);
+	dist = VectorLength(dir);
+	if (dist > 1.5 * ROPE_ELEMENT_SIZE) {
+		f = 4.0;
+	}
+	else if (dist > ROPE_ELEMENT_SIZE) {
+		f = 2.0;
+	}
+	else {
+		f = 0.1;
+	}
+	VectorMA(velocity, f, dir, velocity);
+
+	VectorSubtract(predPos, srcRE->pos, dir);
+	dist = VectorLength(dir);
+	if (dist > 1.5 * ROPE_ELEMENT_SIZE) {
+		f = 4.0;
+	}
+	else if (dist > ROPE_ELEMENT_SIZE) {
+		f = 2.0;
+	}
+	else {
+		f = 0.1;
+	}
+	VectorMA(velocity, f, dir, velocity);
+	
+	VectorScale(velocity, 0.9, velocity);
+
+	VectorCopy(velocity, dstRE->velocity);
+
+	VectorMA(srcRE->pos, dt, velocity, idealpos);
+
+	{
+		vec3_t v;
+		vec3_t w;
+		float d;
+
+		VectorSubtract(succPos, predPos, v);
+		VectorSubtract(idealpos, predPos, w);
+		f = VectorNormalize(v);
+		d = DotProduct(v, w);
+		/*
+		if (d < 0) {
+			VectorMA(idealpos, -d, v, idealpos);
+		}
+		else if (d > f) {
+			VectorMA(idealpos, f - d, v, idealpos);
+		}
+		*/
+		if (d < 0) {
+			VectorCopy(predPos, idealpos);
+		}
+		else if (d > f) {
+			VectorCopy(succPos, idealpos);
+		}
+	}
+
+	if (phase == 1) {
+		VectorSubtract(idealpos, anchorPos, dir);
+		dist = VectorLength(dir);
+		if (dist > 1.5 * ROPE_ELEMENT_SIZE) {
+			VectorMA(anchorPos, 1.5 * ROPE_ELEMENT_SIZE / dist, dir, idealpos);
+		}
+	}
+
+	/*
+	if (!MoveRopeElement(startPos, idealpos, realpos, &dstRE->touch)) {
+		return qfalse;
+	}
+	*/
+	switch (phase) {
+	case 0:
+		VectorCopy(idealpos, dstRE->pos);
+		return qtrue;
+	case 1:
+		if (!MoveRopeElement(startPos, idealpos, realpos, &dstRE->touch)) {
+			return qfalse;
+		}
+		break;
+	}
+
+	/*
+	if (re->touch) {
+		VectorScale(re->velocity, 0.7, re->velocity);
+	}
+	*/
+
+	errSqr = DistanceSquared(idealpos, realpos);
+	if (errSqr > 0.1) {
+		vec3_t realpos2;
+		qboolean touch;
+
+		startPos[2] += ROPE_ELEMENT_SIZE;
+		if (MoveRopeElement(startPos, idealpos, realpos2, &touch)) {
+			if (DistanceSquared(idealpos, realpos2) < errSqr) {
+				dstRE->touch = touch;
+				VectorCopy(realpos2, realpos);
+			}
+		}
+	}
+
+	VectorCopy(realpos, dstRE->pos);
+	return qtrue;
+}
+#endif
+
+/*
+==============
+JUHOX: IsRopeSegmentTaut
+==============
+*/
+/*
+#if GRAPPLE_ROPE
+static qboolean IsRopeSegmentTaut(const vec3_t start, const vec3_t end, int numSections) {
+	return Distance(start, end) / numSections > ROPE_ELEMENT_SIZE;
+}
+#endif
+*/
+
+/*
+==============
+JUHOX: IsRopeTaut
+==============
+*/
+/*
+#if GRAPPLE_ROPE
+static qboolean IsRopeTaut(gentity_t* ent) {
+	gclient_t* client;
+	int i;
+	vec3_t start;
+	int n;
+
+	client = ent->client;
+	if (client->hook->s.eType != ET_GRAPPLE) return qfalse;
+
+	VectorCopy(client->hook->r.currentOrigin, start);
+	n = 0;
+	for (i = 0; i < client->numRopeElements; i++) {
+		ropeElement_t* re;
+
+		re = &client->ropeElements[i];
+		n++;
+		if (!re->touch) continue;
+
+		if (!IsRopeSegmentTaut(start, re->pos, n)) return qfalse;
+
+		VectorCopy(re->pos, start);
+		n = 0;
+	}
+	n++;
+	return IsRopeSegmentTaut(start, client->ps.origin, n);
+}
+#endif
+*/
+#if GRAPPLE_ROPE
+static qboolean IsRopeTaut(gentity_t* ent, qboolean wasTaut) {
+	gclient_t* client;
+	int i;
+	int n;
+	vec3_t dir;
+	float dirLengthSqr;
+	float dirLength;
+	float treshold;
+
+	client = ent->client;
+	if (client->hook->s.eType != ET_GRAPPLE) return qfalse;
+	
+	/*
+	i = 0;
+	n = client->numRopeElements;
+	while (n > 0) {
+		int j;
+		int m;
+		trace_t trace;
+
+		m = n >> 1;
+		j = i + m;
+
+		trap_Trace(&trace, client->ps.origin, NULL, NULL, client->ropeElements[j].pos, -1, CONTENTS_SOLID);
+
+		if (trace.fraction < 1.0) {
+			i = j + 1;
+			n -= m + 1;
+		}
+		else {
+			n = m;
+		}
+	}
+	*/
+	for (i = client->numRopeElements-1; i >= 0; i--) {
+		trace_t trace;
+
+		if (client->ropeElements[i].touch) break;
+
+		trap_Trace(&trace, client->ps.origin, NULL, NULL, client->ropeElements[i].pos, -1, CONTENTS_SOLID);
+
+		if (trace.fraction < 1.0) break;
+	}
+	i++;
+
+	if (i >= client->numRopeElements) return qtrue;
+	/*
+	return IsRopeSegmentTaut(client->ropeElements[i].pos, client->ps.origin, client->numRopeElements - i);
+	*/
+	VectorSubtract(client->ropeElements[i].pos, client->ps.origin, dir);
+	dirLengthSqr = VectorLengthSquared(dir);
+	dirLength = sqrt(dirLengthSqr);
+	treshold = (wasTaut? 0.2 : 0.1) * dirLength;
+	n = i;
+	for (++i; i < client->numRopeElements; i++) {
+		float k;
+		vec3_t pos;
+		vec3_t dir2;
+		vec3_t plummet;
+		
+		VectorCopy(client->ropeElements[i].pos, pos);
+		VectorSubtract(pos, client->ps.origin, dir2);
+		k = DotProduct(dir, dir2) / dirLengthSqr;
+		if (k < 0 || k > 1) return qfalse;
+		VectorMA(client->ps.origin, k, dir, plummet);
+		if (Distance(plummet, pos) > treshold) return qfalse;
+	}
+	return qtrue;
+}
+#endif
+
+/*
+==============
+JUHOX: NextTouchedRopeElement
+==============
+*/
+#if GRAPPLE_ROPE
+static int NextTouchedRopeElement(gclient_t* client, int index, vec3_t pos) {
+	if (index < 0) {
+		VectorCopy(client->ps.origin, pos);
+		return -1;
+	}
+
+	while (index < client->numRopeElements) {
+		if (client->ropeElements[index].touch) break;
+		index++;
+	}
+
+	if (index >= client->numRopeElements) {
+		VectorCopy(client->ps.origin, pos);
+		index = -1;
+	}
+	else {
+		VectorCopy(client->ropeElements[index].pos, pos);
+	}
+	return index;
+}
+#endif
+
+/*
+==============
+JUHOX: TautRopePos
+
+called with index=-1 to init
+==============
+*/
+#if GRAPPLE_ROPE
+static void TautRopePos(gclient_t* client, int index, vec3_t pos) {
+	static float distCovered;
+	static float totalDist;
+	static vec3_t startPos;
+	static vec3_t dir;
+	static int destIndex;
+
+	if (index < 0) {
+		vec3_t dest;
+
+		distCovered = 0;
+		VectorCopy(client->hook->r.currentOrigin, startPos);
+		destIndex = NextTouchedRopeElement(client, 0, dest);
+		VectorSubtract(dest, startPos, dir);
+		totalDist = VectorNormalize(dir);
+		return;
+	}
+
+	distCovered += 1.5 * ROPE_ELEMENT_SIZE;
+
+	CheckDist:
+	if (distCovered > totalDist) {
+		distCovered -= totalDist;
+		if (destIndex < 0) {
+			VectorCopy(client->ps.origin, startPos);
+			VectorClear(dir);
+			totalDist = 1000000.0;
+		}
+		else {
+			vec3_t dest;
+
+			VectorCopy(client->ropeElements[destIndex].pos, startPos);
+			destIndex = NextTouchedRopeElement(client, destIndex+1, dest);
+			VectorSubtract(dest, startPos, dir);
+			totalDist = VectorNormalize(dir);
+			goto CheckDist;
+		}
+	}
+	VectorMA(startPos, distCovered, dir, pos);
+}
+#endif
+
+/*
+==============
+JUHOX: CreateGrappleRope
+==============
+*/
+#if GRAPPLE_ROPE
+static void CreateGrappleRope(gentity_t* ent) {
+	gclient_t* client;
+	int i;
+
+	client = ent->client;
+
+	for (i = 0; i < client->numRopeElements; i++) {
+		gentity_t* ropeEntity;
+		vec3_t pos;
+
+		ropeEntity = client->ropeEntities[i / 8];
+		if (!ropeEntity) {
+			ropeEntity = G_Spawn();
+			if (!ropeEntity) break;
+			client->ropeEntities[i / 8] = ropeEntity;
+
+			ropeEntity->s.eType = ET_GRAPPLE_ROPE;
+			ropeEntity->classname = "grapple rope element";
+			ropeEntity->r.svFlags = SVF_USE_CURRENT_ORIGIN;
+		}
+		ropeEntity->s.time = 0;
+
+		VectorCopy(client->ropeElements[i].pos, pos);
+
+		switch (i & 7) {
+		case 0:
+			G_SetOrigin(ropeEntity, pos);
+			trap_LinkEntity(ropeEntity);
+			break;
+		case 1:
+			VectorCopy(pos, ropeEntity->s.pos.trDelta);
+			break;
+		case 2:
+			VectorCopy(pos, ropeEntity->s.apos.trBase);
+			break;
+		case 3:
+			VectorCopy(pos, ropeEntity->s.apos.trDelta);
+			break;
+		case 4:
+			VectorCopy(pos, ropeEntity->s.origin);
+			break;
+		case 5:
+			VectorCopy(pos, ropeEntity->s.origin2);
+			break;
+		case 6:
+			VectorCopy(pos, ropeEntity->s.angles);
+			break;
+		case 7:
+			VectorCopy(pos, ropeEntity->s.angles2);
+			break;
+		}
+		ropeEntity->s.modelindex = (i & 7) + 1;
+	}
+
+	// delete unused rope entities
+	for (i = (i+7) / 8; i < MAX_ROPE_ELEMENTS / 8; i++) {
+		if (!client->ropeEntities[i]) continue;
+
+		G_FreeEntity(client->ropeEntities[i]);
+		client->ropeEntities[i] = NULL;
+	}
+
+	// chain the rope entities together
+	for (i = 0; i < MAX_ROPE_ELEMENTS / 8; i++) {
+		if (!client->ropeEntities[i]) continue;
+
+		if (i <= 0) {
+			client->ropeEntities[i]->s.otherEntityNum = client->hook->s.number;
+		}
+		else if (client->ropeEntities[i - 1]) {
+			//client->ropeEntities[i - 1]->s.otherEntityNum2 = client->ropeEntities[i]->s.number;
+			client->ropeEntities[i]->s.otherEntityNum = client->ropeEntities[i - 1]->s.number;
+		}
+		else {
+			client->ropeEntities[i]->s.otherEntityNum = ENTITYNUM_NONE;
+		}
+
+		if (i >= MAX_ROPE_ELEMENTS / 8 - 1) {
+			client->ropeEntities[i]->s.otherEntityNum2 = ent->s.number;
+		}
+		else {
+			client->ropeEntities[i]->s.otherEntityNum2 = ENTITYNUM_NONE;
+		}
+	}
+}
+#endif
+
+/*
+==============
+JUHOX: InsertRopeElement
+==============
+*/
+#if GRAPPLE_ROPE
+static qboolean InsertRopeElement(gclient_t* client, int index, const vec3_t pos) {
+	int i;
+	vec3_t predPos;
+	vec3_t predVel;
+	vec3_t succPos;
+	ropeElement_t* re;
+
+	if (client->numRopeElements >= MAX_ROPE_ELEMENTS) return qfalse;
+
+	for (i = client->numRopeElements-1; i >= index; i--) {
+		client->ropeElements[i+1] = client->ropeElements[i];
+	}
+	client->numRopeElements++;
+
+	if (index > 0) {
+		VectorCopy(client->ropeElements[index-1].pos, predPos);
+		VectorCopy(client->ropeElements[index-1].velocity, predVel);
+	}
+	else {
+		VectorCopy(client->hook->r.currentOrigin, predPos);
+		BG_EvaluateTrajectoryDelta(&client->hook->s.pos, level.time, predVel);
+	}
+
+	if (index < client->numRopeElements-1) {
+		VectorCopy(client->ropeElements[index+1].pos, succPos);
+	}
+	else {
+		VectorCopy(client->ps.origin, succPos);
+	}
+
+	re = &client->ropeElements[index];
+
+	if (DistanceSquared(pos, predPos) < DistanceSquared(pos, succPos)) {
+		if (!MoveRopeElement(predPos, pos, re->pos, &re->touch)) return qfalse;
+	}
+	else {
+		if (!MoveRopeElement(succPos, pos, re->pos, &re->touch)) return qfalse;
+	}
+	VectorCopy(predVel, re->velocity);
+	return qtrue;
+}
+#endif
+
+/*
+==============
+JUHOX: ThinkGrapple
+==============
+*/
+#if GRAPPLE_ROPE
+static void ThinkGrapple(gentity_t* ent, int msec) {
+	float dt;
+	gclient_t* client;
+	int i;
+	int n;
+	vec3_t pullpoint;
+	vec3_t start;
+	vec3_t dir;
+	float dist;
+	qboolean autoCut;
+	float pullSpeed;
+
+	if (g_grapple.integer <= HM_disabled || g_grapple.integer >= HM_num_modes) return;
+
+	client = ent->client;
+
+	if (g_grapple.integer == HM_classic) {
+		if (
+			client->ps.weapon == WP_GRAPPLING_HOOK &&
+			!client->offHandHook &&
+			client->hook &&
+			!(client->pers.cmd.buttons & BUTTON_ATTACK)
+		) {
+			Weapon_HookFree(client->hook);
+			return;
+		}
+
+		if (!client->hook) return;
+
+		if (client->hook->s.eType != ET_GRAPPLE) {
+			client->ps.stats[STAT_GRAPPLE_STATE] = GST_windoff;
+		}
+		else if (
+			VectorLengthSquared(client->ps.velocity) > 160*160 &&
+			(client->ps.pm_flags & PMF_TIME_KNOCKBACK) == 0
+		) {
+			client->ps.stats[STAT_GRAPPLE_STATE] = GST_pulling;
+		}
+		else {
+			client->ps.stats[STAT_GRAPPLE_STATE] = GST_silent;
+		}
+		return;
+	}
+
+	if (
+		client->hook &&
+		client->pers.cmd.upmove < 0 &&
+		client->pers.crouchingCutsRope
+	) {
+		Weapon_HookFree(client->hook);
+		return;
+	}
+
+	client->ps.pm_flags &= ~PMF_GRAPPLE_PULL;
+	client->ps.stats[STAT_GRAPPLE_STATE] = GST_unused;
+	if (!client->hook) return;
+
+	switch (g_grapple.integer) {
+	case HM_tool:
+	default:
+		autoCut = qtrue;
+		pullSpeed = GRAPPLE_PULL_SPEED_TOOL;
+		break;
+	case HM_anchor:
+		autoCut = qfalse;
+		pullSpeed = GRAPPLE_PULL_SPEED_ANCHOR;
+		break;
+	case HM_combat:
+		autoCut = qfalse;
+		pullSpeed = GRAPPLE_PULL_SPEED_COMBAT;
+		break;
+	}
+
+	if (
+		client->hook->s.eType == ET_GRAPPLE &&
+		(
+			client->numRopeElements <= 0 ||
+			DistanceSquared(client->ps.origin, client->hook->r.currentOrigin) < 40*40
+		)
+	) {
+		client->numRopeElements = 0;	// no rope explosion
+		if (autoCut) {
+			Weapon_HookFree(client->hook);
+			return;
+		}
+		else if (
+			VectorLengthSquared(client->ps.velocity) > 160*160 &&
+			(client->ps.pm_flags & PMF_TIME_KNOCKBACK) == 0
+		) {
+			client->ps.stats[STAT_GRAPPLE_STATE] = GST_pulling;
+		}
+		else {
+			client->ps.stats[STAT_GRAPPLE_STATE] = GST_silent;
+		}
+		VectorCopy(client->hook->r.currentOrigin, client->ps.grapplePoint);
+		client->ps.pm_flags |= PMF_GRAPPLE_PULL;
+		goto CreateRope;
+	}
+
+	dt = msec / 1000.0;
+
+	for (i = client->numRopeElements - 1; i >= 0; i--) {
+		if (!ThinkRopeElement(client, i, 0, dt / 2)) {
+			Weapon_HookFree(client->hook);
+			return;
+		}
+	}
+
+	VectorCopy(client->hook->r.currentOrigin, pullpoint);
+	n = 0;
+	for (i = 0; i < client->numRopeElements; i++) {
+		if (!ThinkRopeElement(client, i, 1, dt / 2)) {
+			Weapon_HookFree(client->hook);
+			return;
+		}
+		if (client->ropeElements[i].touch) {
+			VectorCopy(client->ropeElements[i].pos, pullpoint);
+			n = i;
+		}
+	}
+
+	/*
+	{
+		int m;
+
+		m = client->numRopeElements - 1;
+		if (m < n) m = n;
+		VectorCopy(client->ropeElements[m].pos, pullpoint);
+	}
+	*/
+
+	VectorCopy(client->ropeElements[client->numRopeElements-1].pos, start);
+	VectorSubtract(client->ps.origin, start, dir);
+	dist = VectorNormalize(dir);
+
+	if (client->hook->s.eType == ET_GRAPPLE) {
+		// hook is attached to wall
+		qboolean isRopeTaut;
+
+		isRopeTaut = IsRopeTaut(ent, client->ropeIsTaut);
+		client->ropeIsTaut = isRopeTaut;
+		/*
+		if (client->pers.cmd.buttons & BUTTON_GESTURE) {	// JUHOX DEBUG
+			// fixed
+			vec3_t v;
+			float s;
+
+			client->ps.stats[STAT_GRAPPLE_STATE] = GST_fixed;
+			if (client->numRopeElements > 0) {
+				VectorCopy(client->ropeElements[client->numRopeElements-1].pos, pullpoint);
+			}
+			VectorCopy(pullpoint, client->ps.grapplePoint);
+			client->ps.pm_flags |= PMF_GRAPPLE_PULL;
+
+			VectorCopy(client->ps.velocity, v);
+			s = VectorNormalize(v);
+			for (i = 1; i < client->numRopeElements; i++) {
+				ropeElement_t* re;
+				vec3_t vel;
+				float speed;
+				float oldspeed;
+				float totalspeed;
+
+				re = &client->ropeElements[i];
+				speed = (s * i) / client->numRopeElements;
+				oldspeed = VectorLength(re->velocity);
+				totalspeed = speed + oldspeed;
+				VectorScale(v, speed * speed / totalspeed, vel);
+				VectorMA(vel, oldspeed / totalspeed, re->velocity, re->velocity);
+			}
+			goto CreateRope;
+		}
+		else*/
+		if (client->lastTimeWinded < level.time - 250) {
+			// blocked
+			client->ps.stats[STAT_GRAPPLE_STATE] = GST_blocked;
+			VectorCopy(pullpoint, client->ps.grapplePoint);
+			client->ps.pm_flags |= PMF_GRAPPLE_PULL;
+
+			{
+				vec3_t v;
+				float speed;
+
+				v[0] = crandom();
+				v[1] = crandom();
+				v[2] = crandom();
+				speed = 0.5 * ((level.time - client->lastTimeWinded) / 1000.0);
+				if (speed > 2) speed = 2;
+				VectorMA(client->ps.velocity, 400 * speed, v, client->ps.velocity);
+			}
+		}
+		else if (isRopeTaut) {
+			// pulling
+			client->ps.stats[STAT_GRAPPLE_STATE] = GST_pulling;
+			VectorCopy(pullpoint, client->ps.grapplePoint);
+			client->ps.pm_flags |= PMF_GRAPPLE_PULL;
+		}
+		else {
+			// winding
+			client->ps.stats[STAT_GRAPPLE_STATE] = GST_rewind;
+		}
+
+		{
+			TautRopePos(client, -1, NULL);
+			for (i = 0; i < client->numRopeElements; i++) {
+				ropeElement_t* re;
+				vec3_t dest;
+				vec3_t v;
+				float f;
+				//float speed;
+				//float oldspeed;
+				//float totalspeed;
+
+				re = &client->ropeElements[i];
+				TautRopePos(client, i, dest);
+				VectorSubtract(dest, re->pos, v);
+				VectorScale(v, 16, v);
+				f = (float)i / client->numRopeElements;
+				VectorMA(v, Square(f), client->ps.velocity, v);
+				//speed = VectorNormalize(v);
+
+				/*
+				oldspeed = VectorLength(re->velocity);
+				totalspeed = speed + oldspeed;
+				VectorScale(v, speed * speed / totalspeed, v);
+				VectorMA(v, oldspeed / totalspeed, re->velocity, re->velocity);
+				*/
+				/*
+				VectorAdd(re->velocity, v, v);
+				VectorScale(v, 0.5, re->velocity);
+				*/
+				VectorCopy(v, re->velocity);
+			}
+		}
+
+		while (dist < ROPE_ELEMENT_SIZE) {
+			trace_t trace;
+
+			trap_Trace(&trace, start, NULL, NULL, client->ps.origin, -1, CONTENTS_SOLID);
+			if (trace.startsolid || trace.allsolid || trace.fraction < 1) {
+				VectorCopy(pullpoint, client->ps.grapplePoint);
+				client->ps.pm_flags |= PMF_GRAPPLE_PULL;
+				client->ps.stats[STAT_GRAPPLE_STATE] = GST_pulling;
+				goto CreateRope;
+			}
+
+			client->lastTimeWinded = level.time;
+			client->numRopeElements--;
+			if (client->numRopeElements <= 0) {
+				/*
+				Weapon_HookFree(client->hook);
+				return;
+				*/
+				goto CreateRope;
+			}
+
+			VectorCopy(client->ropeElements[client->numRopeElements-1].pos, start);
+			dist = Distance(start, client->ps.origin);
+		}
+	}
+	else {
+		// hook is flying
+
+		client->ps.stats[STAT_GRAPPLE_STATE] = GST_windoff;
+		client->ropeIsTaut = qfalse;
+		client->lastTimeWinded = level.time;
+		/*
+		if (dist > 2 * ROPE_ELEMENT_SIZE) {
+			int n;
+
+			n = (int) ((dist - ROPE_ELEMENT_SIZE) / ROPE_ELEMENT_SIZE);
+			if (client->numRopeElements + n >= MAX_ROPE_ELEMENTS) {
+				Weapon_HookFree(client->hook);
+				return;
+			}
+
+			for (i = 0; i < n; i++) {
+				vec3_t pos;
+
+				VectorMA(start, (i+1) * ROPE_ELEMENT_SIZE, dir, pos);
+				VectorCopy(pos, client->ropeElements[client->numRopeElements].pos);
+				VectorCopy(
+					client->ropeElements[client->numRopeElements-1].velocity,
+					client->ropeElements[client->numRopeElements].velocity
+				);
+				client->numRopeElements++;
+			}
+		}
+		*/
+		{
+			vec3_t prevPos;
+
+			VectorCopy(client->hook->r.currentOrigin, prevPos);
+			for (i = 0; i <= client->numRopeElements; i++) {
+				vec3_t dir;
+				float dist;
+				float maxdist;
+				vec3_t destPos;
+
+				if (i < client->numRopeElements) {
+					VectorCopy(client->ropeElements[i].pos, destPos);
+					maxdist = 1.7 * ROPE_ELEMENT_SIZE;
+				}
+				else {
+					VectorCopy(client->ps.origin, destPos);
+					maxdist = 1.2 * ROPE_ELEMENT_SIZE;
+				}
+
+				VectorSubtract(destPos, prevPos, dir);
+				dist = VectorLength(dir);
+				if (dist > maxdist) {
+					int j;
+
+					n = (int) ((dist - ROPE_ELEMENT_SIZE) / ROPE_ELEMENT_SIZE) + 1;
+					for (j = 0; j < n; j++) {
+						vec3_t pos;
+
+						VectorMA(prevPos, (float)(j+1) / (n+1), dir, pos);
+						if (!InsertRopeElement(client, i + j, pos)) {
+							Weapon_HookFree(client->hook);
+							return;
+						}
+					}
+					i += n;
+				}
+				VectorCopy(destPos, prevPos);
+			}
+
+		}
+	}
+
+	CreateRope:
+
+	dist = Distance(client->ps.origin, client->hook->r.currentOrigin);
+	if (dist < 200) {
+		if (dist < 40) dist = 40;
+		pullSpeed *= dist / 200;
+	}
+	client->ps.stats[STAT_GRAPPLE_SPEED] = pullSpeed;
+
+	CreateGrappleRope(ent);
+}
+#endif
 	}
 	for ( i = oldEventSequence ; i < client->ps.eventSequence ; i++ ) {
 		event = client->ps.events[ i & (MAX_PS_EVENTS-1) ];
@@ -759,6 +1792,8 @@ void ClientThink_real( gentity_t *ent ) {
 	int			oldEventSequence;
 	int			msec;
 	usercmd_t	*ucmd;
+	
+	//pm.timer = 0;
 
 	client = ent->client;
 
@@ -913,7 +1948,8 @@ void ClientThink_real( gentity_t *ent ) {
 	else {
 		pm.tracemask = MASK_PLAYERSOLID;
 	}
-	pm.trace = trap_Trace;
+	pm.trace = trap_PlayerTrace;
+	//pm.trace = trap_Trace;
 	pm.pointcontents = trap_PointContents;
 	pm.debugLevel = g_debugMove.integer;
 	pm.noFootsteps = ( g_dmflags.integer & DF_NO_FOOTSTEPS ) > 0;
@@ -922,6 +1958,8 @@ void ClientThink_real( gentity_t *ent ) {
 	pm.pmove_msec = pmove_msec.integer;
 
 	VectorCopy( client->ps.origin, client->oldOrigin );
+
+	pm.ps->module = 2;
 
 #ifdef MISSIONPACK
 		if (level.intermissionQueued != 0 && g_singlePlayer.integer) {
@@ -958,8 +1996,7 @@ void ClientThink_real( gentity_t *ent ) {
 	}
 
 	// use the snapped origin for linking so it matches client predicted versions
-	VectorCopy( ent->s.pos.trBase, ent->r.currentOrigin );
-
+	//VectorCopy( ent->s.pos.trBase, ent->r.currentOrigin );
 	VectorCopy (pm.mins, ent->r.mins);
 	VectorCopy (pm.maxs, ent->r.maxs);
 
@@ -968,6 +2005,9 @@ void ClientThink_real( gentity_t *ent ) {
 
 	// execute client events
 	ClientEvents( ent, oldEventSequence );
+
+	//update and create weapon angles here
+
 
 	// link entity now, after any personal teleporters have been used
 	trap_LinkEntity (ent);

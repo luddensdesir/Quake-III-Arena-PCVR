@@ -156,6 +156,13 @@ void	trap_CM_BoxTrace( trace_t *results, const vec3_t start, const vec3_t end,
 	syscall( CG_CM_BOXTRACE, results, start, end, mins, maxs, model, brushmask );
 }
 
+void	trap_CM_TracePlayer( trace_t *results, const vec3_t start, const vec3_t end,
+						  const vec3_t mins, const vec3_t maxs,
+						  clipHandle_t model, int brushmask, vec3_t * body ) {
+	syscall( CG_CM_TRACEPLAYER, results, start, end, mins, maxs, model, brushmask, body);
+}
+
+
 void	trap_CM_CapsuleTrace( trace_t *results, const vec3_t start, const vec3_t end,
 						  const vec3_t mins, const vec3_t maxs,
 						  clipHandle_t model, int brushmask ) {
@@ -168,6 +175,16 @@ void	trap_CM_TransformedBoxTrace( trace_t *results, const vec3_t start, const ve
 						  const vec3_t origin, const vec3_t angles ) {
 	syscall( CG_CM_TRANSFORMEDBOXTRACE, results, start, end, mins, maxs, model, brushmask, origin, angles );
 }
+
+
+void	trap_CM_TransformedPlayerBoxTrace( trace_t *results, const vec3_t start, const vec3_t end,
+						  const vec3_t mins, const vec3_t maxs,
+						  clipHandle_t model, int brushmask,
+						  const vec3_t * body,
+						  const vec3_t origin, const vec3_t angles ) {
+	syscall( CG_CM_TRANSFORMEDPLAYERBOXTRACE, results, start, end, mins, maxs, model, brushmask, body, origin, angles );
+}
+
 
 void	trap_CM_TransformedCapsuleTrace( trace_t *results, const vec3_t start, const vec3_t end,
 						  const vec3_t mins, const vec3_t maxs,

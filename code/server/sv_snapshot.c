@@ -479,7 +479,7 @@ static void SV_BuildClientSnapshot( client_t *client ) {
 
 	// find the client's viewpoint
 	VectorCopy( ps->origin, org );
-	org[2] += ps->viewheight;
+	org[2] += ps->viewPos[1];
 
 	// add all the entities directly visible to the eye, which
 	// may include portal entities that merge other viewpoints

@@ -1146,7 +1146,7 @@ int	VM_CallCompiled( vm_t *vm, int *args ) {
 		mov		esi, programStack;
 		mov		edi, opStack
 		call	entryPoint
-		mov		programStack, esi
+ 		mov		programStack, esi
 		mov		opStack, edi
 		popad
 	}

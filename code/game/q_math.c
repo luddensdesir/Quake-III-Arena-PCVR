@@ -22,7 +22,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 //
 // q_math.c -- stateless support routines that are included in each code module
 #include "q_shared.h"
-
+//#include "q_quat.h"
 
 vec3_t	vec3_origin = {0,0,0};
 vec3_t	axisDefault[3] = { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } };
@@ -497,6 +497,8 @@ void ProjectPointOnPlane( vec3_t dst, const vec3_t p, const vec3_t normal )
 
 	inv_denom =  DotProduct( normal, normal );
 #ifndef Q3_VM
+	//Com_Printf( "%f  %f  %f\n", normal[0], normal[1], normal[2]);
+
 	assert( Q_fabs(inv_denom) != 0.0f ); // bk010122 - zero vectors get here
 #endif
 	inv_denom = 1.0f / inv_denom;
@@ -599,6 +601,33 @@ float LerpAngle (float from, float to, float frac) {
 
 	return a;
 }
+//
+//signed short WrapShort( int i ) {
+//	if ( i < -32768 ) {
+//		i += 65535;
+//	}
+//
+//	if ( i > 32767 ) {
+//		i -= 65535;
+//	}
+//
+//	return i;
+//}
+
+
+///* //zcm
+//===============
+//LerpPosition
+//===============
+//I don't really want this here. Why doesn't it work in qmath? Is there more than one qmath?
+//*/
+//float LerpPosition (float from, float to, float frac) {
+//	float	a;
+//
+//	a = from + frac * (to - from);
+//
+//	return a;
+//}
 
 
 /*
@@ -1306,3 +1335,90 @@ void PerpendicularVector( vec3_t dst, const vec3_t src )
 }
 
 
+//Referenced in q_shared
+
+void AnglesToQuat (const vec3_t angles, vec4_t quat)
+{
+	vec3_t a;
+	float cr, cp, cy, sr, sp, sy, cpcy, spsy;
+
+	a[PITCH] = (M_PI/360.0) * angles[PITCH];
+	a[YAW] = (M_PI/360.0) * angles[YAW];
+	a[ROLL] = (M_PI/360.0) * angles[ROLL];
+
+	cr = cos(a[ROLL]);
+	cp = cos(a[PITCH]);
+	cy = cos(a[YAW]);
+
+	sr = sin(a[ROLL]);
+	sp = sin(a[PITCH]);
+	sy = sin(a[YAW]);
+
+	cpcy = cp * cy;
+	spsy = sp * sy;
+	quat[0] = cr * cpcy + sr * spsy; // w
+	quat[1] = sr * cpcy - cr * spsy; // x
+	quat[2] = cr * sp * cy + sr * cp * sy; // y
+	quat[3] = cr * cp * sy - sr * sp * cy; // z
+}
+
+void QuatToAxis(vec4_t q, vec3_t axis[3])
+{
+	float wx, wy, wz, xx, yy, yz, xy, xz, zz, x2, y2, z2;
+
+	x2 = q[1] + q[1];
+	y2 = q[2] + q[2];
+	z2 = q[3] + q[3];
+	xx = q[1] * x2;
+	xy = q[1] * y2;
+	xz = q[1] * z2;
+	yy = q[2] * y2;
+	yz = q[2] * z2;
+	zz = q[3] * z2;
+	wx = q[0] * x2;
+	wy = q[0] * y2;
+	wz = q[0] * z2;
+
+	axis[0][0] = 1.0 - (yy + zz);
+	axis[1][0] = xy - wz;
+	axis[2][0] = xz + wy;
+
+	axis[0][1] = xy + wz;
+	axis[1][1] = 1.0 - (xx + zz);
+	axis[2][1] = yz - wx;
+
+	axis[0][2] = xz - wy;
+	axis[1][2] = yz + wx;
+	axis[2][2] = 1.0 - (xx + yy);
+}
+
+void QuatMul(const vec4_t q1, const vec4_t q2, vec4_t res)
+{
+	float A, B, C, D, E, F, G, H;
+
+	A = (q1[0] + q1[1])*(q2[0] + q2[1]);
+	B = (q1[3] - q1[2])*(q2[2] - q2[3]);
+	C = (q1[0] - q1[1])*(q2[2] + q2[3]);
+	D = (q1[2] + q1[3])*(q2[0] - q2[1]);
+	E = (q1[1] + q1[3])*(q2[1] + q2[2]);
+	F = (q1[1] - q1[3])*(q2[1] - q2[2]);
+	G = (q1[0] + q1[2])*(q2[0] - q2[3]);
+	H = (q1[0] - q1[2])*(q2[0] + q2[3]);
+
+	res[0] = B + (H - E - F + G)*0.5;
+	res[1] = A - (E + F + G + H)*0.5;
+	res[2] = C + (E - F + G - H)*0.5;
+	res[3] = D + (E - F - G + H)*0.5;
+}
+
+void QuatToAngles (const vec4_t q, vec3_t a)
+{
+	vec4_t q2;
+	q2[0] = q[0]*q[0];
+	q2[1] = q[1]*q[1];
+	q2[2] = q[2]*q[2];
+	q2[3] = q[3]*q[3];
+	a[ROLL] = (180.0/M_PI)*atan2 (2*(q[2]*q[3] + q[1]*q[0]) , (-q2[1] - q2[2] + q2[3] + q2[0]));
+	a[PITCH] = (180.0/M_PI)*asin (-2*(q[1]*q[3] - q[2]*q[0]));
+	a[YAW] = (180.0/M_PI)*atan2 (2*(q[1]*q[2] + q[3]*q[0]) , (q2[1] - q2[2] - q2[3] + q2[0]));
+}

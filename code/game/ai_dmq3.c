@@ -1591,7 +1591,7 @@ void BotSetupForMovement(bot_state_t *bs) {
 	VectorCopy(bs->cur_ps.origin, initmove.origin);
 	VectorCopy(bs->cur_ps.velocity, initmove.velocity);
 	VectorClear(initmove.viewoffset);
-	initmove.viewoffset[2] += bs->cur_ps.viewheight;
+	initmove.viewoffset[2] += bs->cur_ps.viewPos[1];
 	initmove.entitynum = bs->entitynum;
 	initmove.client = bs->client;
 	initmove.thinktime = bs->thinktime;
@@ -3377,7 +3377,7 @@ void BotAimAtEnemy(bot_state_t *bs) {
 		//get the start point shooting from
 		//NOTE: the x and y projectile start offsets are ignored
 		VectorCopy(bs->origin, start);
-		start[2] += bs->cur_ps.viewheight;
+		start[2] += bs->cur_ps.viewPos[1];
 		start[2] += wi.offset[2];
 		//
 		BotAI_Trace(&trace, start, mins, maxs, bestorigin, bs->entitynum, MASK_SHOT);
@@ -3624,7 +3624,7 @@ void BotCheckAttack(bot_state_t *bs) {
 	trap_BotGetWeaponInfo(bs->ws, bs->weaponnum, &wi);
 	//get the start point shooting from
 	VectorCopy(bs->origin, start);
-	start[2] += bs->cur_ps.viewheight;
+	start[2] += bs->cur_ps.viewPos[1];
 	AngleVectors(bs->viewangles, forward, right, NULL);
 	start[0] += forward[0] * wi.offset[0] + right[0] * wi.offset[1];
 	start[1] += forward[1] * wi.offset[0] + right[1] * wi.offset[1];

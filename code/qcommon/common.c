@@ -2069,7 +2069,7 @@ int Com_EventLoop( void ) {
 	msg_t		buf;
 
 	MSG_Init( &buf, bufData, sizeof( bufData ) );
-
+	
 	while ( 1 ) {
 		ev = Com_GetEvent();
 

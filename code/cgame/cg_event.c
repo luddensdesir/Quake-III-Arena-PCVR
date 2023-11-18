@@ -925,6 +925,8 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		cent->currentState.weapon = WP_RAILGUN;
 		// if the end was on a nomark surface, don't make an explosion
 		CG_RailTrail( ci, es->origin2, es->pos.trBase );
+		//not sent to etxreal
+		//CG_DebugTrail( ci, es->origin2, es->pos.trBase );
 		if ( es->eventParm != 255 ) {
 			ByteToDir( es->eventParm, dir );
 			CG_MissileHitWall( es->weapon, es->clientNum, position, dir, IMPACTSOUND_DEFAULT );
@@ -1142,7 +1144,10 @@ void CG_EntityEvent( centity_t *cent, vec3_t position ) {
 		if ( !(es->eFlags & EF_KAMIKAZE) ) {
 			trap_S_StartSound( NULL, es->number, CHAN_BODY, cgs.media.gibSound );
 		}
-		CG_GibPlayer( cent->lerpOrigin );
+		//CG_GibPlayer( cent->lerpOrigin );
+		CG_GibPlayer( cent );
+
+		//Com_Printf( '%i', cent->currentState.clientNum);
 		break;
 
 	case EV_STOPLOOPINGSOUND:

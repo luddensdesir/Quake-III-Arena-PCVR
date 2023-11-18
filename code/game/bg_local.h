@@ -26,7 +26,13 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define	STEPSIZE		18
 
+#define	MAX_LEAP_VELOCITY	230 //zcm
 #define	JUMP_VELOCITY	270
+#define	RUN_HEIGHT	210
+#define	JUMP_RUN_DIFF (JUMP_VELOCITY - RUN_HEIGHT)
+//#define	RUN_HEIGHT	190
+//THERE ARE OTHER WAYS Of achieving better movement. limiting jump time depending on speed. lower speed higher jump delay
+//#define	RUN_HEIGHT	270
 
 #define	TIMER_LAND		130
 #define	TIMER_GESTURE	(34*66+50)

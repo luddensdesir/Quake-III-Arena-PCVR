@@ -24,8 +24,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 // g_client.c -- client functions that don't happen every frame
 
-static vec3_t	playerMins = {-15, -15, -24};
-static vec3_t	playerMaxs = {15, 15, 32};
+//not in etxreal
+static vec3_t	playerMins = {-15, -15, -28};
+static vec3_t	playerMaxs = {15, 15, 28};
 
 /*QUAKED info_player_deathmatch (1 0 1) (-16 -16 -24) (16 16 32) initial
 potential spawning position for deathmatch games.
@@ -489,6 +490,14 @@ void SetClientViewAngle( gentity_t *ent, vec3_t angle ) {
 	}
 	VectorCopy( angle, ent->s.angles );
 	VectorCopy (ent->s.angles, ent->client->ps.viewangles);
+
+	ent->client->ps.weaponOffset[0] = 5;
+	ent->client->ps.weaponOffset[1] = 0;
+	ent->client->ps.weaponOffset[2] = -30; //zcm
+
+	//ent->client->ps.hand = 0; //zcm
+
+	VectorCopy ( ent->client->ps.viewangles, ent->client->ps.weaponAngles);
 }
 
 /*
@@ -1210,6 +1219,9 @@ void ClientSpawn(gentity_t *ent) {
 		client->ps.weaponstate = WEAPON_READY;
 
 	}
+
+	client->ps.maxSightsGap = ANGLE2SHORT(20);
+	client->ps.maxBaseGap = ANGLE2SHORT(45);
 
 	// don't allow full run speed for a bit
 	client->ps.pm_flags |= PMF_TIME_KNOCKBACK;

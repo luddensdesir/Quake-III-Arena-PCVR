@@ -639,6 +639,8 @@ void IN_MouseMove ( void ) {
 		return;
 	}
 
+	//Com_Printf(" %i, %i\n", mx, my);
+
 	Sys_QueEvent( 0, SE_MOUSE, mx, my, 0, NULL );
 }
 
@@ -656,6 +658,9 @@ IN_Startup
 */
 void IN_Startup( void ) {
 	Com_Printf ("\n------- Input Initialization -------\n");
+
+	//IN_StartHMD();
+
 	IN_StartupMouse ();
 	IN_StartupJoystick ();
 	IN_StartupMIDI();
@@ -663,6 +668,43 @@ void IN_Startup( void ) {
 
 	in_mouse->modified = qfalse;
 	in_joystick->modified = qfalse;
+} 
+
+void IN_StartHMD(void){ 
+	//cl.hmdW = 0;
+	//cl.hmdX = 0;
+	//cl.hmdY = 0;
+	//cl.hmdZ = 0;
+
+	//SetOVRSession();
+}
+
+void IN_HMDMove(void){ 
+	//ovrPosef poseB;
+	//ovrVector3f poseB;
+	//ovrTrackingState ts;
+	//int x, y, z, w;
+
+	//ts = GetTrackingState();
+	//if (ts.StatusFlags & (ovrStatus_OrientationTracked | ovrStatus_PositionTracked)){
+	//	poseB = ts.HeadPose.AngularVelocity;
+	//}
+
+	//x = poseB.x * 1000000;
+	//y = poseB.y * 1000000;
+	//z = poseB.z * 1000000;
+	////w = poseB.w * 1000000;
+	//w = 1;
+ //
+	////Com_Printf(" %f, %f, %f, %f \n", poseB.Orientation.x, poseB.Orientation.y, poseB.Orientation.z, poseB.Orientation.w);
+	////Com_Printf(" %f, %f, %f\n", poseB.x, poseB.y, poseB.z);
+	////Com_Printf(" %i, %i, %i\n", x, y, z); 
+
+	//Sys_QueEvent4( 0, SE_HMD, x, y, z, w, 0, NULL );
+}
+
+void IN_StopHMD(void){ 
+	//DestroyOVRSession();
 }
 
 /*
@@ -671,6 +713,7 @@ IN_Shutdown
 ===========
 */
 void IN_Shutdown( void ) {
+	//IN_StopHMD();
 	IN_DeactivateMouse();
 	IN_ShutdownDIMouse();
 	IN_ShutdownMIDI();
@@ -764,6 +807,9 @@ void IN_Frame (void) {
 	}
 
 	IN_ActivateMouse();
+ 
+	//what does activatemouse do?
+	//IN_HMDMove();
 
 	// post events to the system que
 	IN_MouseMove();

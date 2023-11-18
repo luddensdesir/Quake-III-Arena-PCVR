@@ -40,6 +40,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 void	IN_MouseEvent (int mstate);
 
+void Sys_QueEvent4( int time, sysEventType_t type, int value, int value2, int value3, int value4, int ptrLength, void *ptr );
+
 void Sys_QueEvent( int time, sysEventType_t type, int value, int value2, int ptrLength, void *ptr );
 
 void	Sys_CreateConsole( void );
@@ -62,6 +64,11 @@ void	IN_DeactivateWin32Mouse( void);
 
 void	IN_Activate (qboolean active);
 void	IN_Frame (void);
+
+
+void	IN_StartHMD(void);
+void	IN_HMDMove(void);
+void	IN_StopHMD(void); 
 
 // window procedure
 LONG WINAPI MainWndProc (

@@ -42,6 +42,9 @@ Returns qtrue if the velocity was clipped in some way
 ==================
 */
 #define	MAX_CLIP_PLANES	5
+
+extern vec3_t traceBody[8];
+
 qboolean	PM_SlideMove( qboolean gravity ) {
 	int			bumpcount, numbumps;
 	vec3_t		dir;
@@ -65,6 +68,11 @@ qboolean	PM_SlideMove( qboolean gravity ) {
 	if ( gravity ) {
 		VectorCopy( pm->ps->velocity, endVelocity );
 		endVelocity[2] -= pm->ps->gravity * pml.frametime;
+
+		//if(/*this is where I should insert the rotational code to start*/){
+
+		//}
+
 		pm->ps->velocity[2] = ( pm->ps->velocity[2] + endVelocity[2] ) * 0.5;
 		primal_velocity[2] = endVelocity[2];
 		if ( pml.groundPlane ) {
@@ -94,7 +102,9 @@ qboolean	PM_SlideMove( qboolean gravity ) {
 		VectorMA( pm->ps->origin, time_left, pm->ps->velocity, end );
 
 		// see if we can make it there
-		pm->trace ( &trace, pm->ps->origin, pm->mins, pm->maxs, end, pm->ps->clientNum, pm->tracemask);
+		//not in etxreal
+		pm->trace(&trace, pm->ps->origin, pm->mins, pm->maxs, end, pm->ps->clientNum, pm->tracemask, traceBody, pm->ps->origin, pm->ps->viewangles);
+		//pm->trace(&trace, pm->ps->origin, pm->mins, pm->maxs, end, pm->ps->clientNum, pm->tracemask);
 
 		if (trace.allsolid) {
 			// entity is completely trapped in another solid
@@ -248,7 +258,10 @@ void PM_StepSlideMove( qboolean gravity ) {
 
 	VectorCopy(start_o, down);
 	down[2] -= STEPSIZE;
-	pm->trace (&trace, start_o, pm->mins, pm->maxs, down, pm->ps->clientNum, pm->tracemask);
+	
+	//not in etxreal
+	pm->trace(&trace, start_o, pm->mins, pm->maxs, down, pm->ps->clientNum, pm->tracemask, traceBody, pm->ps->origin, pm->ps->viewangles);
+	//pm->trace(&trace, start_o, pm->mins, pm->maxs, down, pm->ps->clientNum, pm->tracemask);
 	VectorSet(up, 0, 0, 1);
 	// never step up when you still have up velocity
 	if ( pm->ps->velocity[2] > 0 && (trace.fraction == 1.0 ||
@@ -263,7 +276,9 @@ void PM_StepSlideMove( qboolean gravity ) {
 	up[2] += STEPSIZE;
 
 	// test the player position if they were a stepheight higher
-	pm->trace (&trace, start_o, pm->mins, pm->maxs, up, pm->ps->clientNum, pm->tracemask);
+	//not in etxreal
+	pm->trace(&trace, start_o, pm->mins, pm->maxs, up, pm->ps->clientNum, pm->tracemask, traceBody, pm->ps->origin, pm->ps->viewangles);
+	//pm->trace(&trace, start_o, pm->mins, pm->maxs, up, pm->ps->clientNum, pm->tracemask);
 	if ( trace.allsolid ) {
 		if ( pm->debugLevel ) {
 			Com_Printf("%i:bend can't step\n", c_pmove);
@@ -276,12 +291,16 @@ void PM_StepSlideMove( qboolean gravity ) {
 	VectorCopy (trace.endpos, pm->ps->origin);
 	VectorCopy (start_v, pm->ps->velocity);
 
+
+	//determines what happens on collisions
 	PM_SlideMove( gravity );
 
 	// push down the final amount
 	VectorCopy (pm->ps->origin, down);
 	down[2] -= stepSize;
-	pm->trace (&trace, pm->ps->origin, pm->mins, pm->maxs, down, pm->ps->clientNum, pm->tracemask);
+	//not in etxreal
+	pm->trace(&trace, pm->ps->origin, pm->mins, pm->maxs, down, pm->ps->clientNum, pm->tracemask, traceBody, pm->ps->origin, pm->ps->viewangles);
+	//pm->trace(&trace, pm->ps->origin, pm->mins, pm->maxs, down, pm->ps->clientNum, pm->tracemask);
 	if ( !trace.allsolid ) {
 		VectorCopy (trace.endpos, pm->ps->origin);
 	}
@@ -291,7 +310,10 @@ void PM_StepSlideMove( qboolean gravity ) {
 
 #if 0
 	// if the down trace can trace back to the original position directly, don't step
-	pm->trace( &trace, pm->ps->origin, pm->mins, pm->maxs, start_o, pm->ps->clientNum, pm->tracemask);
+	
+	//not in etxreal
+	pm->trace(&trace, pm->ps->origin, pm->mins, pm->maxs, start_o, pm->ps->clientNum, pm->tracemask, traceBody, pm->ps->origin, pm->ps->viewangles);
+	//pm->trace(&trace, pm->ps->origin, pm->mins, pm->maxs, start_o, pm->ps->clientNum, pm->tracemask);
 	if ( trace.fraction == 1.0 ) {
 		// use the original move
 		VectorCopy (down_o, pm->ps->origin);
@@ -305,6 +327,7 @@ void PM_StepSlideMove( qboolean gravity ) {
 		// use the step move
 		float	delta;
 
+		//this causes the smooth step movement and the hitbox not being accurately positioned
 		delta = pm->ps->origin[2] - start_o[2];
 		if ( delta > 2 ) {
 			if ( delta < 7 ) {

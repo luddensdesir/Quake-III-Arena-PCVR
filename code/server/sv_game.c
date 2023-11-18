@@ -387,6 +387,9 @@ int SV_GameSystemCalls( int *args ) {
 	case G_TRACE:
 		SV_Trace( VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6], args[7], /*int capsule*/ qfalse );
 		return 0;
+	case G_PLAYERTRACE:
+		SV_PlayerTrace( VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6], args[7], VMA(8),  VMA(9), VMA(10), /*int capsule*/ qfalse );
+		return 0;
 	case G_TRACECAPSULE:
 		SV_Trace( VMA(1), VMA(2), VMA(3), VMA(4), VMA(5), args[6], args[7], /*int capsule*/ qtrue );
 		return 0;

@@ -2401,6 +2401,11 @@ void CL_Init( void ) {
 	Cvar_Set( "cl_running", "1" );
 
 	Com_Printf( "----- Client Initialization Complete -----\n" );
+
+	//cl.hmdW = 0;
+	//cl.hmdX = 0;
+	//cl.hmdY = 0;
+	//cl.hmdZ = 0;
 }
 
 

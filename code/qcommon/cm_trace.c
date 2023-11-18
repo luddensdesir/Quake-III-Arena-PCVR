@@ -1359,6 +1359,139 @@ void CM_Trace( trace_t *results, const vec3_t start, const vec3_t end, vec3_t mi
 	*results = tw.trace;
 }
 
+
+void CM_TracePlayer( trace_t *results, const vec3_t start, const vec3_t end, vec3_t mins, vec3_t maxs,
+						  clipHandle_t model, const vec3_t origin, int brushmask, vec3_t * body, int capsule, sphere_t *sphere ) {
+	int			i, j;
+	traceWork_t	tw;
+	vec3_t		offset;
+	cmodel_t	*cmod;
+
+	cmod = CM_ClipHandleToModel( model );
+
+	cm.checkcount++;		// for multi-check avoidance
+
+	c_traces++;				// for statistics, may be zeroed
+
+	// fill in a default trace
+	Com_Memset( &tw, 0, sizeof(tw) );
+	tw.trace.fraction = 1;	// assume it goes the entire distance until shown otherwise
+	VectorCopy(origin, tw.modelOrigin);
+
+	if (!cm.numNodes) {
+		*results = tw.trace;
+		return;	// map not loaded, shouldn't happen
+	}
+
+	// allow NULL to be passed in for 0,0,0
+	if ( !mins ) {
+		mins = vec3_origin;
+	}
+	if ( !maxs ) {
+		maxs = vec3_origin;
+	}
+
+	// set basic parms
+	tw.contents = brushmask;
+
+	// adjust so that mins and maxs are always symetric, which
+	// avoids some complications with plane expanding of rotated
+	// bmodels
+	for ( i = 0 ; i < 3 ; i++ ) {
+		offset[i] = ( mins[i] + maxs[i] ) * 0.5;
+		tw.size[0][i] = mins[i] - offset[i];
+		tw.size[1][i] = maxs[i] - offset[i];
+		tw.start[i] = start[i] + offset[i];
+		tw.end[i] = end[i] + offset[i];
+	}
+
+	// if a sphere is already specified
+	tw.sphere.use = capsule;
+	tw.sphere.radius = ( tw.size[1][0] > tw.size[1][2] ) ? tw.size[1][2]: tw.size[1][0];
+	tw.sphere.halfheight = tw.size[1][2];
+	VectorSet( tw.sphere.offset, 0, 0, tw.size[1][2] - tw.sphere.radius );
+
+	tw.maxOffset = tw.size[1][0] + tw.size[1][1] + tw.size[1][2];
+
+	tw.offsets[0][0] = tw.size[0][0];
+	tw.offsets[0][1] = tw.size[0][1];
+	tw.offsets[0][2] = tw.size[0][2];
+
+	tw.offsets[1][0] = tw.size[1][0];
+	tw.offsets[1][1] = tw.size[0][1];
+	tw.offsets[1][2] = tw.size[0][2];
+
+	tw.offsets[2][0] = tw.size[0][0];
+	tw.offsets[2][1] = tw.size[1][1];
+	tw.offsets[2][2] = tw.size[0][2];
+
+	tw.offsets[3][0] = tw.size[1][0];
+	tw.offsets[3][1] = tw.size[1][1];
+	tw.offsets[3][2] = tw.size[0][2];
+
+	tw.offsets[4][0] = tw.size[0][0];
+	tw.offsets[4][1] = tw.size[0][1];
+	tw.offsets[4][2] = tw.size[1][2];
+
+	tw.offsets[5][0] = tw.size[1][0];
+	tw.offsets[5][1] = tw.size[0][1];
+	tw.offsets[5][2] = tw.size[1][2];
+
+	tw.offsets[6][0] = tw.size[0][0];
+	tw.offsets[6][1] = tw.size[1][1];
+	tw.offsets[6][2] = tw.size[1][2];
+
+	tw.offsets[7][0] = tw.size[1][0];
+	tw.offsets[7][1] = tw.size[1][1];
+	tw.offsets[7][2] = tw.size[1][2];
+
+	//for(j = 0; j < 8; j++){
+	//	VectorCopy( body[j], tw.offsets[j]);
+	//	Com_Printf( "%i: %f, %f, %f ", j, tw.offsets[j][0], tw.offsets[j][1], tw.offsets[j][2] );
+	//	//Com_Printf( "%i: %f, %f, %f", j, body[j][0], body[j][1], body[j][2] );
+	//	Com_Printf( "\n" );
+	//}
+	//Com_Printf( "\n" );
+
+	//
+	// calculate bounds
+	//
+
+	for ( i = 0 ; i < 3 ; i++ ) {
+		if ( tw.start[i] < tw.end[i] ) {
+			tw.bounds[0][i] = tw.start[i] + tw.size[0][i];
+			tw.bounds[1][i] = tw.end[i] + tw.size[1][i];
+		} else {
+			tw.bounds[0][i] = tw.end[i] + tw.size[0][i];
+			tw.bounds[1][i] = tw.start[i] + tw.size[1][i];
+		}
+	}
+
+	tw.isPoint = qfalse;
+	tw.extents[0] = tw.size[1][0];
+	tw.extents[1] = tw.size[1][1];
+	tw.extents[2] = tw.size[1][2];
+
+	//
+	// general sweeping through world
+	//
+	CM_TraceThroughTree( &tw, 0, 0, 1, tw.start, tw.end );
+
+	// generate endpos from the original, unmodified start/end
+	if ( tw.trace.fraction == 1 ) {
+		VectorCopy (end, tw.trace.endpos);
+	} else {
+		for ( i=0 ; i<3 ; i++ ) {
+			tw.trace.endpos[i] = start[i] + tw.trace.fraction * (end[i] - start[i]);
+		}
+	}
+
+   assert(tw.trace.allsolid || tw.trace.fraction == 1.0 || VectorLengthSquared(tw.trace.plane.normal) > 0.9999);
+
+	*results = tw.trace;
+}
+
+
 /*
 ==================
 CM_BoxTrace
@@ -1367,8 +1500,19 @@ CM_BoxTrace
 void CM_BoxTrace( trace_t *results, const vec3_t start, const vec3_t end,
 						  vec3_t mins, vec3_t maxs,
 						  clipHandle_t model, int brushmask, int capsule ) {
+	//both cgame and qagame do pmove stuff through this function
+	
 	CM_Trace( results, start, end, mins, maxs, model, vec3_origin, brushmask, capsule, NULL );
 }
+
+void CM_BoxTracePlayer( trace_t *results, const vec3_t start, const vec3_t end,
+						  vec3_t mins, vec3_t maxs,
+						  clipHandle_t model, int brushmask, vec3_t * body, int capsule ) {
+	//both cgame and qagame do pmove stuff through this function
+	
+	CM_TracePlayer( results, start, end, mins, maxs, model, vec3_origin, brushmask, body, capsule, NULL );
+}
+
 
 /*
 ==================
@@ -1378,6 +1522,7 @@ Handles offseting and rotation of the end points for moving and
 rotating entities
 ==================
 */
+
 void CM_TransformedBoxTrace( trace_t *results, const vec3_t start, const vec3_t end,
 						  vec3_t mins, vec3_t maxs,
 						  clipHandle_t model, int brushmask,
@@ -1388,6 +1533,9 @@ void CM_TransformedBoxTrace( trace_t *results, const vec3_t start, const vec3_t 
 	vec3_t		offset;
 	vec3_t		symetricSize[2];
 	vec3_t		matrix[3], transpose[3];
+
+	vec3_t		temp;
+
 	int			i;
 	float		halfwidth;
 	float		halfheight;
@@ -1400,10 +1548,12 @@ void CM_TransformedBoxTrace( trace_t *results, const vec3_t start, const vec3_t 
 	if ( !maxs ) {
 		maxs = vec3_origin;
 	}
-
 	// adjust so that mins and maxs are always symetric, which
 	// avoids some complications with plane expanding of rotated
 	// bmodels
+	
+	//VectorClear(temp);
+
 	for ( i = 0 ; i < 3 ; i++ ) {
 		offset[i] = ( mins[i] + maxs[i] ) * 0.5;
 		symetricSize[0][i] = mins[i] - offset[i];
@@ -1440,6 +1590,7 @@ void CM_TransformedBoxTrace( trace_t *results, const vec3_t start, const vec3_t 
 		//		 bevels invalid.
 		//		 However this is correct for capsules since a capsule itself is rotated too.
 		CreateRotationMatrix(angles, matrix);
+		//CreateRotationMatrix(temp, matrix);
 		RotatePoint(start_l, matrix);
 		RotatePoint(end_l, matrix);
 		// rotated sphere offset for capsule
@@ -1447,12 +1598,125 @@ void CM_TransformedBoxTrace( trace_t *results, const vec3_t start, const vec3_t 
 		sphere.offset[1] = -matrix[1][ 2 ] * t;
 		sphere.offset[2] = matrix[2][ 2 ] * t;
 	}
+
 	else {
 		VectorSet( sphere.offset, 0, 0, t );
 	}
 
+
+	//only thinkg that really changes in cm_boxtrace is start and end
 	// sweep the box through the model
 	CM_Trace( &trace, start_l, end_l, symetricSize[0], symetricSize[1], model, origin, brushmask, capsule, &sphere );
+
+	// if the bmodel was rotated and there was a collision
+	if ( rotated && trace.fraction != 1.0 ) {
+		// rotation of bmodel collision plane
+		TransposeMatrix(matrix, transpose);
+		RotatePoint(trace.plane.normal, transpose);
+	}
+
+	// re-calculate the end position of the trace because the trace.endpos
+	// calculated by CM_Trace could be rotated and have an offset
+	trace.endpos[0] = start[0] + trace.fraction * (end[0] - start[0]);
+	trace.endpos[1] = start[1] + trace.fraction * (end[1] - start[1]);
+	trace.endpos[2] = start[2] + trace.fraction * (end[2] - start[2]);
+
+	*results = trace;
+}
+
+void CM_TransformedPlayerBoxTrace( trace_t*		results, 
+								const vec3_t	start, 
+								const vec3_t	end, 
+								vec3_t			mins, 
+								vec3_t			maxs, 
+								clipHandle_t	model, 
+								int				brushmask, 
+								vec3_t 		*	body,
+								const vec3_t	origin, 
+								const vec3_t	angles, 
+								int				capsule ) {
+
+	trace_t		trace;
+	vec3_t		start_l, end_l;
+	qboolean	rotated;
+	vec3_t		offset;
+	vec3_t		symetricSize[2];
+	vec3_t		matrix[3], transpose[3];
+
+	vec3_t		temp;
+
+	int			i;
+	float		halfwidth;
+	float		halfheight;
+	float		t;
+	sphere_t	sphere;
+
+	if ( !mins ) {
+		mins = vec3_origin;
+	}
+	if ( !maxs ) {
+		maxs = vec3_origin;
+	}
+	// adjust so that mins and maxs are always symetric, which
+	// avoids some complications with plane expanding of rotated
+	// bmodels
+	
+	//VectorClear(temp);
+
+	for ( i = 0 ; i < 3 ; i++ ) {
+		offset[i] = ( mins[i] + maxs[i] ) * 0.5;
+		symetricSize[0][i] = mins[i] - offset[i];
+		symetricSize[1][i] = maxs[i] - offset[i];
+		start_l[i] = start[i] + offset[i];
+		end_l[i] = end[i] + offset[i];
+	}
+
+	// subtract origin offset
+	VectorSubtract( start_l, origin, start_l );
+	VectorSubtract( end_l, origin, end_l );
+
+	// rotate start and end into the models frame of reference
+	if ( model != BOX_MODEL_HANDLE && 
+		(angles[0] || angles[1] || angles[2]) ) {
+		rotated = qtrue;
+	} else {
+		rotated = qfalse;
+	}
+
+	halfwidth = symetricSize[ 1 ][ 0 ];
+	halfheight = symetricSize[ 1 ][ 2 ];
+
+	sphere.use = capsule;
+	sphere.radius = ( halfwidth > halfheight ) ? halfheight : halfwidth;
+	sphere.halfheight = halfheight;
+	t = halfheight - sphere.radius;
+
+	if (rotated) {
+		// rotation on trace line (start-end) instead of rotating the bmodel
+		// NOTE: This is still incorrect for bounding boxes because the actual bounding
+		//		 box that is swept through the model is not rotated. We cannot rotate
+		//		 the bounding box or the bmodel because that would make all the brush
+		//		 bevels invalid.
+		//		 However this is correct for capsules since a capsule itself is rotated too.
+		CreateRotationMatrix(angles, matrix);
+		//CreateRotationMatrix(temp, matrix);
+		RotatePoint(start_l, matrix);
+		RotatePoint(end_l, matrix);
+		// rotated sphere offset for capsule
+		sphere.offset[0] = matrix[0][ 2 ] * t;
+		sphere.offset[1] = -matrix[1][ 2 ] * t;
+		sphere.offset[2] = matrix[2][ 2 ] * t;
+	}
+
+	else {
+		VectorSet( sphere.offset, 0, 0, t );
+	}
+
+
+	//only thinkg that really changes in cm_boxtrace is start and end
+	// sweep the box through the model
+	//CM_Trace( &trace, start, end, symetricSize[0], symetricSize[1], model, origin, brushmask, capsule, &sphere );
+	CM_TracePlayer( &trace, start, end, symetricSize[0], symetricSize[1], model, origin, brushmask, body, capsule, &sphere );
 
 	// if the bmodel was rotated and there was a collision
 	if ( rotated && trace.fraction != 1.0 ) {

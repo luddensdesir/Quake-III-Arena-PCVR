@@ -23,11 +23,19 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // cg_weapons.c -- events and effects dealing with weapons
 #include "cg_local.h"
 
+
+
+static void CG_RocketFragment( vec3_t origin, vec3_t velocity, float dur, float minSize, float maxSize) {
+	//Com_Printf( "%f %f %f\n", origin[0], origin[1], origin[2]);
+	//Com_Printf( "%f %f %f\n", velocity[0], velocity[1], velocity[2]);
+}
+
 /*
 ==========================
 CG_MachineGunEjectBrass
 ==========================
 */
+
 static void CG_MachineGunEjectBrass( centity_t *cent ) {
 	localEntity_t	*le;
 	refEntity_t		*re;
@@ -86,9 +94,15 @@ static void CG_MachineGunEjectBrass( centity_t *cent ) {
 	le->angles.trBase[0] = rand()&31;
 	le->angles.trBase[1] = rand()&31;
 	le->angles.trBase[2] = rand()&31;
-	le->angles.trDelta[0] = 2;
-	le->angles.trDelta[1] = 1;
-	le->angles.trDelta[2] = 0;
+
+	AnglesToQuat (le->angles.trBase, le->quatOrient);
+	le->angVel = 10 * random();
+	le->rotAxis[0] = crandom();
+	le->rotAxis[1] = crandom();
+	le->rotAxis[2] = crandom();
+	VectorNormalize (le->rotAxis);
+	le->radius = 4;
+	QuatInit (1,0,0,0,le->quatRot);
 
 	le->leFlags = LEF_TUMBLE;
 	le->leBounceSoundType = LEBS_BRASS;
@@ -162,9 +176,15 @@ static void CG_ShotgunEjectBrass( centity_t *cent ) {
 		le->angles.trBase[0] = rand()&31;
 		le->angles.trBase[1] = rand()&31;
 		le->angles.trBase[2] = rand()&31;
-		le->angles.trDelta[0] = 1;
-		le->angles.trDelta[1] = 0.5;
-		le->angles.trDelta[2] = 0;
+
+		AnglesToQuat (le->angles.trBase, le->quatOrient);
+		le->angVel = 10 * random();
+		le->rotAxis[0] = crandom();
+		le->rotAxis[1] = crandom();
+		le->rotAxis[2] = crandom();
+		VectorNormalize (le->rotAxis);
+		le->radius = 6;
+		QuatInit (1,0,0,0,le->quatRot);
 
 		le->leFlags = LEF_TUMBLE;
 		le->leBounceSoundType = LEBS_BRASS;
@@ -207,6 +227,60 @@ static void CG_NailgunEjectBrass( centity_t *cent ) {
 #endif
 
 
+
+void CG_DebugTrail (vec3_t start, vec3_t end, vec3_t offset) {
+	localEntity_t   *le;
+	refEntity_t     *re;
+	vec3_t globalOffset;
+
+
+	le = CG_AllocLocalEntity();
+	re = &le->refEntity;
+
+	le->leType = LE_FADE_RGB;
+	le->startTime = cg.time;
+	le->endTime = cg.time + cg_debugTrailTime.value;
+	le->lifeRate = 1.0 / ( le->endTime - le->startTime );
+
+	re->shaderTime = cg.time / 1000.0f;
+	re->reType = RT_RAIL_CORE;
+	re->customShader = cgs.media.railCoreShader;
+
+	VectorCopy( start, re->origin );
+	VectorCopy( end, re->oldorigin );
+
+	globalOffset[0] = -120;
+	globalOffset[1] = 20;
+	globalOffset[2] = 60;
+
+	VectorAdd( re->origin, globalOffset, re->origin );
+	VectorAdd( re->oldorigin, globalOffset, re->oldorigin );
+
+	//VectorAdd( re->origin, offset, re->origin );//actual player info 
+	//VectorAdd( re->oldorigin, offset, re->oldorigin );
+
+	//Com_Printf(" %f, %f, %f\n", end[0], end[1], end[2]);
+
+	le->color[0] = 1;
+	le->color[1] = 1;
+	le->color[2] = 0;
+
+	le->color[3] = 1.0f;
+
+	AxisClear( re->axis );
+
+
+	//Com_Printf("s: %f %f %f ", start[0], start[1], start[2]);
+	//Com_Printf("e:   %f %f %f\n", end[0], end[1], end[2]);
+	//Com_Printf("e:   %f %f %f\n", offset[0], offset[1], offset[2]);
+}
+
+float LerpPositionTemp (float from, float to, float frac) {
+	float	a;
+	a = from + (frac) * (to - from);
+	return a;
+}
+
 /*
 ==========================
 CG_RailTrail
@@ -216,19 +290,42 @@ void CG_RailTrail (clientInfo_t *ci, vec3_t start, vec3_t end) {
 	vec3_t axis[36], move, move2, next_move, vec, temp;
 	float  len;
 	int    i, j, skip;
- 
+
+	float groupRand;
 	localEntity_t *le;
 	refEntity_t   *re;
+
+	float scaleRand;
+	float posOffs;
+	float posRand;
+	float colRand;
+	int randomize;
+	int randomizeRadius;
+	int randomizeDistance;
+	int randomizeMaxDist;
+	int lastRandDist;
+	int shift;
+	float lerp;
+	float oldScale;
+	float oldDist;
+	int blue;
+
+	 
+	float scale;
  
 #define RADIUS   4
 #define ROTATION 1
 #define SPACING  5
- 
-	start[2] -= 4;
+
+	oldScale = 0;
+	shift = 0;
+	start[2] -4;
 	VectorCopy (start, move);
 	VectorSubtract (end, start, vec);
 	len = VectorNormalize (vec);
 	PerpendicularVector(temp, vec);
+
+
 	for (i = 0 ; i < 36; i++) {
 		RotatePointAroundVector(axis[i], vec, temp, i * 10);//banshee 2.4 was 10
 	}
@@ -239,11 +336,15 @@ void CG_RailTrail (clientInfo_t *ci, vec3_t start, vec3_t end) {
 	le->leType = LE_FADE_RGB;
 	le->startTime = cg.time;
 	le->endTime = cg.time + cg_railTrailTime.value;
-	le->lifeRate = 1.0 / (le->endTime - le->startTime);
+	le->lifeRate = 20.0f / (le->endTime - le->startTime);
+	//wow, I could probably make the railtrail look amazing with a shader that actually changed to electrical sparks with a liferate 2
+	// the shader would run the normal smoke, then run a different animation after half of it was completed
+	//CG_LightningBolt. make the lightning trail around in a perfect spiral somehow
  
 	re->shaderTime = cg.time / 1000.0f;
 	re->reType = RT_RAIL_CORE;
-	re->customShader = cgs.media.railCoreShader;
+	//re->customShader = cgs.media.railCoreShader;
+	re->customShader = cgs.media.lightningShader;
  
 	VectorCopy(start, re->origin);
 	VectorCopy(end, re->oldorigin);
@@ -272,44 +373,119 @@ void CG_RailTrail (clientInfo_t *ci, vec3_t start, vec3_t end) {
 	}
 	skip = -1;
  
+	lastRandDist = 0;
+	randomizeMaxDist = 750;
+	randomizeDistance = rand() % randomizeMaxDist;
+
 	j = 18;
+	//Com_Printf("%f\n", len);
+	//Com_Printf("%i\n", ((((int)len)-(((int)len) % SPACING)) / SPACING));
+	//Com_Printf("%i\n\n", (((int)len) % SPACING));
     for (i = 0; i < len; i += SPACING) {
 		if (i != skip) {
+
+			if(i>randomizeDistance){
+				lastRandDist = i;
+				randomizeDistance = (rand() % randomizeMaxDist) + lastRandDist;
+
+				//randomizeDistance = 0;
+				if(randomizeDistance > len){
+					randomizeDistance = (int)len;
+				}
+
+				shift = rand() % 360;
+				//Com_Printf("%i\n", randomizeDistance);
+			}
+			
+			if((i/10)%2 == 1){
+				blue = 1;
+				//Com_Printf("%i", blue);
+			} else {
+				blue = 0;
+			}
+			blue = 0;
+
+			//Com_Printf("%i\n", blue);
+
+			//scaleRandomizeTime
 			skip = i + SPACING;
 			le = CG_AllocLocalEntity();
             re = &le->refEntity;
             le->leFlags = LEF_PUFF_DONT_SCALE;
 			le->leType = LE_MOVE_SCALE_FADE;
             le->startTime = cg.time;
-            le->endTime = cg.time + (i>>1) + 600;
+            le->endTime = cg.time + (i>>1) + /*fabs((crandom() * 2000)) + */500 + (blue * -490);
             le->lifeRate = 1.0 / (le->endTime - le->startTime);
+
+			//posOffs = 0;
+			//randomize = 0;
+			posOffs = 1;
+			randomize = 1;
+				
+			if(randomize == 1){
+				scaleRand = 1;
+				posRand = 1;
+				colRand = 1;
+			} else {
+				scaleRand = 0;
+				posRand = 0;
+				colRand = 0;
+			}
+
+			scaleRand = 1;
+
+			//shift = 0;
+
+			scale = 40;
+			scale = fabs(( (.1 * sinf(DEG2RAD(i+shift)) * .25) + sinf(DEG2RAD((i/10) + shift)))) * scale;
+
+
+			oldScale = LerpPositionTemp(oldScale, scale, .75);
+			//Com_Printf("%f\n", (oldScale/40)-.5);
 
             re->shaderTime = cg.time / 1000.0f;
             re->reType = RT_SPRITE;
-            re->radius = 1.1f;
-			re->customShader = cgs.media.railRingsShader;
+            re->radius = ( scaleRand * (crandom() * 1.5) * oldScale) + 10;
+			re->rotation = rand() % 360;
 
-            re->shaderRGBA[0] = ci->color2[0] * 255;
-            re->shaderRGBA[1] = ci->color2[1] * 255;
-            re->shaderRGBA[2] = ci->color2[2] * 255;
+			re->customShader = cgs.media.shotgunSmokePuffShader;
+
+            //re->shaderRGBA[0] = ci->color2[0] * 255;
+            //re->shaderRGBA[1] = ci->color2[1] * 255;
+            //re->shaderRGBA[2] = ci->color2[2] * 255;
+
+			le->radius = 100;
+
+			groupRand = crandom();
+            re->shaderRGBA[0] = (colRand  * (groupRand * 50)) +205 + (blue * -50);
+            re->shaderRGBA[1] = (colRand  * (groupRand * 50)) +205 + (blue * -50);
+            re->shaderRGBA[2] = (colRand  * (groupRand * 50)) +205;
             re->shaderRGBA[3] = 255;
 
-            le->color[0] = ci->color2[0] * 0.75;
-            le->color[1] = ci->color2[1] * 0.75;
-            le->color[2] = ci->color2[2] * 0.75;
-            le->color[3] = 1.0f;
+            //le->color[0] = ci->color2[0] * 0.75;
+            //le->color[1] = ci->color2[1] * 0.75;
+            //le->color[2] = ci->color2[2] * 0.75;
+
+            le->color[0] = 1;
+            le->color[1] = 1;
+            le->color[2] = 1;
+
+            //le->color[3] = (colRand * (fabs(crandom() * .5 )-.75)) + 1;
+            //le->color[3] = .75;
+            le->color[3] = .25;
 
             le->pos.trType = TR_LINEAR;
             le->pos.trTime = cg.time;
 
 			VectorCopy( move, move2);
-            VectorMA(move2, RADIUS , axis[j], move2);
+            VectorMA(move2, RADIUS * ((oldScale/30) -.5) , axis[j], move2);
             VectorCopy(move2, le->pos.trBase);
+			
+            le->pos.trDelta[0] = axis[j][0]* ((oldScale /40) * posOffs * 150) ;
+            le->pos.trDelta[1] = axis[j][1]* ((oldScale /40) * posOffs * 150) ;
+            le->pos.trDelta[2] = axis[j][2]* ((oldScale /40) * posOffs * 150)  + 10;
 
-            le->pos.trDelta[0] = axis[j][0]*6;
-            le->pos.trDelta[1] = axis[j][1]*6;
-            le->pos.trDelta[2] = axis[j][2]*6;
-		}
+		}  
 
         VectorAdd (move, vec, move);
 
@@ -340,7 +516,7 @@ static void CG_RocketTrail( centity_t *ent, const weaponInfo_t *wi ) {
 	up[1] = 0;
 	up[2] = 0;
 
-	step = 50;
+	step = /*fabs((crandom()) * 10) + */15;
 
 	es = &ent->currentState;
 	startTime = ent->trailTime;
@@ -371,15 +547,17 @@ static void CG_RocketTrail( centity_t *ent, const weaponInfo_t *wi ) {
 		BG_EvaluateTrajectory( &es->pos, t, lastPos );
 
 		smoke = CG_SmokePuff( lastPos, up, 
-					  wi->trailRadius, 
-					  1, 1, 1, 0.33f,
-					  wi->wiTrailTime, 
+					  (crandom() * 10) + (.56 * wi->trailRadius), 
+					  1, (fabs(crandom()) * .25) + .75, (fabs(crandom()) * .25) + .75, (fabs(crandom()) * 0.15f) + .25f,
+					  (fabs(crandom()) * wi->wiTrailTime) + 750, 
 					  t,
 					  0,
 					  0, 
 					  cgs.media.smokePuffShader );
-		// use the optimized local entity add
-		smoke->leType = LE_SCALE_FADE;
+
+		smoke->pos.trDelta[0] = (crandom() *crandom() * crandom() * 10) + 5;
+		smoke->pos.trDelta[1] = (crandom() *crandom() * crandom() * 10) + 5;
+		smoke->pos.trDelta[2] = (crandom() *crandom() * crandom() * 75) + 25;
 	}
 
 }
@@ -484,9 +662,9 @@ static void CG_PlasmaTrail( centity_t *cent, const weaponInfo_t *wi ) {
 	le = CG_AllocLocalEntity();
 	re = &le->refEntity;
 
-	velocity[0] = 60 - 120 * crandom();
-	velocity[1] = 40 - 80 * crandom();
-	velocity[2] = 100 - 200 * crandom();
+	velocity[0] = 6 - 12 * crandom();
+	velocity[1] = 4 - 8 * crandom();
+	velocity[2] = 10 - 20 * crandom();
 
 	le->leType = LE_MOVE_SCALE_FADE;
 	le->leFlags = LEF_TUMBLE;
@@ -797,6 +975,13 @@ void CG_RegisterWeapon( int weaponNum ) {
 		weaponInfo->flashSound[0] = trap_S_RegisterSound( "sound/weapons/plasma/hyprbf1a.wav", qfalse );
 		cgs.media.plasmaExplosionShader = trap_R_RegisterShader( "plasmaExplosion" );
 		cgs.media.railRingsShader = trap_R_RegisterShader( "railDisc" );
+		
+		//not in etxreal
+		weaponInfo->missileDlight = 200;
+		weaponInfo->wiTrailTime = 2000;
+		weaponInfo->trailRadius = 64;
+		
+		MAKERGB( weaponInfo->missileDlightColor, 0.6f, 0.6f, 1.0f );
 		break;
 
 	case WP_RAILGUN:
@@ -815,6 +1000,10 @@ void CG_RegisterWeapon( int weaponNum ) {
 		cgs.media.bfgExplosionShader = trap_R_RegisterShader( "bfgExplosion" );
 		weaponInfo->missileModel = trap_R_RegisterModel( "models/weaphits/bfg.md3" );
 		weaponInfo->missileSound = trap_S_RegisterSound( "sound/weapons/rocket/rockfly.wav", qfalse );
+		
+		//not in etxreal
+		weaponInfo->missileDlight = 200;
+		MAKERGB( weaponInfo->missileDlightColor, 1, 0.7f, 1.0f );
 		break;
 
 	 default:
@@ -916,21 +1105,36 @@ static void CG_CalculateWeaponPosition( vec3_t origin, vec3_t angles ) {
 	float	scale;
 	int		delta;
 	float	fracsin;
+	float	pitch;
 
 	VectorCopy( cg.refdef.vieworg, origin );
 	VectorCopy( cg.refdefViewAngles, angles );
+	
+	//not in etxreal
+	pitch = (cg.refdefViewAngles[0]);
+	if(pitch >0)
+		pitch *= .01;
+	else pitch *= .015;
 
-	// on odd legs, invert some angles
+	pitch*=pitch;
+
+	pitch = fabs(pitch);
+	pitch +=1;
+
+	//Com_Printf("View: %f \n", pitch);
+
+	 //on odd legs, invert some angles
 	if ( cg.bobcycle & 1 ) {
 		scale = -cg.xyspeed;
 	} else {
 		scale = cg.xyspeed;
 	}
+	//Com_Printf("CG: %f \n", cg.xyspeed);
 
 	// gun angles from bobbing
-	angles[ROLL] += scale * cg.bobfracsin * 0.005;
-	angles[YAW] += scale * cg.bobfracsin * 0.01;
-	angles[PITCH] += cg.xyspeed * cg.bobfracsin * 0.005;
+	angles[ROLL] += scale * cg.bobfracsin  * 0.0000;
+	angles[YAW] += scale * cg.bobfracsin *pitch* 0.025;
+	angles[PITCH] += cg.xyspeed * cg.bobfracsin *pitch* 0.005;
 
 	// drop the weapon when landing
 	delta = cg.time - cg.landTime;
@@ -952,11 +1156,13 @@ static void CG_CalculateWeaponPosition( vec3_t origin, vec3_t angles ) {
 #endif
 
 	// idle drift
+	//MODIFY THIS SO THAT IT POINTS IN A MORE RANDOM DIRECTION
 	scale = cg.xyspeed + 40;
 	fracsin = sin( cg.time * 0.001 );
-	angles[ROLL] += scale * fracsin * 0.01;
-	angles[YAW] += scale * fracsin * 0.01;
-	angles[PITCH] += scale * fracsin * 0.01;
+
+	angles[ROLL] += scale * fracsin  *pitch* 0.0001;
+	angles[YAW] += scale * fracsin * pitch * 0.015;
+	angles[PITCH] += scale * fracsin * pitch * 0.03;
 }
 
 
@@ -1006,12 +1212,13 @@ static void CG_LightningBolt( centity_t *cent, vec3_t origin ) {
 			}
 		}
 
-		AngleVectors(angle, forward, NULL, NULL );
+		//AngleVectors (ent->client->ps.weaponAngles, forward, right, up); //zcm
+		AngleVectors(cg.snap->ps.weaponAngles, forward, NULL, NULL );
 		VectorCopy(cent->lerpOrigin, muzzlePoint );
-//		VectorCopy(cg.refdef.vieworg, muzzlePoint );
+		//VectorCopy(cg.refdef.vieworg, muzzlePoint );
 	} else {
 		// !CPMA
-		AngleVectors( cent->lerpAngles, forward, NULL, NULL );
+		AngleVectors( cg.snap->ps.weaponAngles, forward, NULL, NULL );
 		VectorCopy(cent->lerpOrigin, muzzlePoint );
 	}
 
@@ -1022,6 +1229,8 @@ static void CG_LightningBolt( centity_t *cent, vec3_t origin ) {
 
 	// project forward by the lightning range
 	VectorMA( muzzlePoint, LIGHTNING_RANGE, forward, endPoint );
+
+	endPoint[2] -= 10;
 
 	// see if it hit a wall
 	CG_Trace( &trace, muzzlePoint, vec3_origin, vec3_origin, endPoint, 
@@ -1215,7 +1424,7 @@ static void CG_AddWeaponWithPowerups( refEntity_t *gun, int powerups ) {
 CG_AddPlayerWeapon
 
 Used for both the view weapon (ps is valid) and the world modelother character models (ps is NULL)
-The main player will have this called for BOTH cases, so effects like light and
+The main player will have 4 called for BOTH cases, so effects like light and
 sound should only be done on the world model case.
 =============
 */
@@ -1227,7 +1436,6 @@ void CG_AddPlayerWeapon( refEntity_t *parent, playerState_t *ps, centity_t *cent
 	weapon_t	weaponNum;
 	weaponInfo_t	*weapon;
 	centity_t	*nonPredictedCent;
-//	int	col;
 
 	weaponNum = cent->currentState.weapon;
 
@@ -1241,22 +1449,6 @@ void CG_AddPlayerWeapon( refEntity_t *parent, playerState_t *ps, centity_t *cent
 	gun.renderfx = parent->renderfx;
 
 	// set custom shading for railgun refire rate
-	if ( ps ) {
-		if ( cg.predictedPlayerState.weapon == WP_RAILGUN 
-			&& cg.predictedPlayerState.weaponstate == WEAPON_FIRING ) {
-			float	f;
-
-			f = (float)cg.predictedPlayerState.weaponTime / 1500;
-			gun.shaderRGBA[1] = 0;
-			gun.shaderRGBA[0] = 
-			gun.shaderRGBA[2] = 255 * ( 1.0 - f );
-		} else {
-			gun.shaderRGBA[0] = 255;
-			gun.shaderRGBA[1] = 255;
-			gun.shaderRGBA[2] = 255;
-			gun.shaderRGBA[3] = 255;
-		}
-	}
 
 	gun.hModel = weapon->weaponModel;
 	if (!gun.hModel) {
@@ -1295,6 +1487,24 @@ void CG_AddPlayerWeapon( refEntity_t *parent, playerState_t *ps, centity_t *cent
 		CG_PositionRotatedEntityOnTag( &barrel, &gun, weapon->weaponModel, "tag_barrel" );
 
 		CG_AddWeaponWithPowerups( &barrel, cent->currentState.powerups );
+	}
+
+
+	if ( ps ) {
+		if ( cg.predictedPlayerState.weapon == WP_RAILGUN 
+			&& cg.predictedPlayerState.weaponstate == WEAPON_FIRING ) {
+			float	f;
+
+			f = (float)cg.predictedPlayerState.weaponTime / 1500;
+			gun.shaderRGBA[1] = 0;
+			gun.shaderRGBA[0] = 
+			gun.shaderRGBA[2] = 255 * ( 1.0 - f );
+		} else {
+			gun.shaderRGBA[0] = 255;
+			gun.shaderRGBA[1] = 255;
+			gun.shaderRGBA[2] = 255;
+			gun.shaderRGBA[3] = 0;
+		}
 	}
 
 	// make sure we aren't looking at cg.predictedPlayerEntity for LG
@@ -1375,7 +1585,7 @@ void CG_AddViewWeapon( playerState_t *ps ) {
 	float		fovOffset;
 	vec3_t		angles;
 	weaponInfo_t	*weapon;
-
+	vec3_t			offset;
 	if ( ps->persistant[PERS_TEAM] == TEAM_SPECTATOR ) {
 		return;
 	}
@@ -1397,9 +1607,9 @@ void CG_AddViewWeapon( playerState_t *ps ) {
 
 		if ( cg.predictedPlayerState.eFlags & EF_FIRING ) {
 			// special hack for lightning gun...
-			VectorCopy( cg.refdef.vieworg, origin );
-			VectorMA( origin, -8, cg.refdef.viewaxis[2], origin );
-			CG_LightningBolt( &cg_entities[ps->clientNum], origin );
+			//VectorCopy( cg.refdef.vieworg, origin );
+			//VectorMA( origin, -8, cg.refdef.viewaxis[2], origin );
+			//CG_LightningBolt( &cg_entities[ps->clientNum], origin );
 		}
 		return;
 	}
@@ -1422,16 +1632,22 @@ void CG_AddViewWeapon( playerState_t *ps ) {
 
 	memset (&hand, 0, sizeof(hand));
 
-	// set up gun position
-	CG_CalculateWeaponPosition( hand.origin, angles );
+	// set up gun position AND angles
+	
+	
+	
+	offset[0] = cg.refdef.vieworg[0];
+	offset[1] = cg.refdef.vieworg[1];
+	offset[2] = cg.refdef.vieworg[2] - cg.predictedPlayerState.viewPos[1];
 
-	VectorMA( hand.origin, cg_gun_x.value, cg.refdef.viewaxis[0], hand.origin );
-	VectorMA( hand.origin, cg_gun_y.value, cg.refdef.viewaxis[1], hand.origin );
-	VectorMA( hand.origin, (cg_gun_z.value+fovOffset), cg.refdef.viewaxis[2], hand.origin );
+
+	VectorAdd(offset, cg.predictedPlayerState.weaponOffset,  hand.origin );
+	//VectorCopy( cg.predictedPlayerState.weaponOffset,  hand.origin );
+	VectorCopy(cg.predictedPlayerState.weaponAngles, angles);
 
 	AnglesToAxis( angles, hand.axis );
 
-	// map torso animations to weapon animations
+	// map torso animations to weapon animations	
 	if ( cg_gun_frame.integer ) {
 		// development tool
 		hand.frame = hand.oldframe = cg_gun_frame.integer;
@@ -1758,26 +1974,37 @@ void CG_MissileHitWall( int weapon, int clientNum, vec3_t origin, vec3_t dir, im
 	float			light;
 	vec3_t			lightColor;
 	localEntity_t	*le;
+	localEntity_t	*le2;
 	int				r;
 	qboolean		alphaFade;
 	qboolean		isSprite;
 	int				duration;
 	vec3_t			sprOrg;
 	vec3_t			sprVel;
+	vec3_t			temp3;
+	float minSize;
+	float maxSize;
+	int i;
+	float scale;
+	float ang;
+	vec3_t nAxis[3];
+	vec3_t angles;
 
 	mark = 0;
 	radius = 32;
 	sfx = 0;
 	mod = 0;
 	shader = 0;
-	light = 0;
+	light = (crandom() * 50) + 100;
 	lightColor[0] = 1;
 	lightColor[1] = 1;
 	lightColor[2] = 0;
 
+
 	// set defaults
 	isSprite = qfalse;
 	duration = 600;
+	scale = 1;
 
 	switch ( weapon ) {
 	default:
@@ -1823,58 +2050,234 @@ void CG_MissileHitWall( int weapon, int clientNum, vec3_t origin, vec3_t dir, im
 		shader = cgs.media.grenadeExplosionShader;
 		sfx = cgs.media.sfx_rockexp;
 		mark = cgs.media.burnMarkShader;
-		radius = 64;
-		light = 300;
+		radius = (crandom() * 40) + 90;
+		light = (crandom() * 200) + 800;
 		isSprite = qtrue;
+		duration = (crandom()* 50) + 100 * scale;
+		lightColor[0] = 1;
+		lightColor[1] = 0.75;
+		lightColor[2] = 0;
+
+		scale = .6;
+		if (cg_oldRocket.integer == 0) {
+			// explosion sprite animation
+			VectorMA( origin, 24, dir, sprOrg );
+			VectorScale( dir, 64, sprVel ); 
+
+			sprVel[2] = 1750 + (crandom()* 500) * scale;
+			CG_ParticleExplosion( "explode1", sprOrg, sprVel, 100, 20  * scale, 400  * scale );
+
+			sprVel[2] = 500 + (crandom()* 250)  * scale;
+
+			CG_ParticleExplosion( "explode1", sprOrg, sprVel, (crandom() * 100) + 250,
+			//might be cool if i could make custome falling smoke trails
+					((crandom() * 200) + 100)  * scale,
+					((crandom() * 10) + 10)  * scale);
+
+
+			for(i = 0; i < 40; i++){
+
+				sprVel[0] = crandom() * 5000 * scale;
+				sprVel[1] = crandom() * 5000 * scale;
+				sprVel[2] = crandom() * 5000 * scale;
+
+				CG_ParticleExplosion( "explode1", sprOrg, sprVel, (crandom() * 50) + 100,
+					((crandom() * 200) + 100) * scale,
+					((crandom() * 10) + 10) * scale) ;
+
+				CG_RocketFragment(sprOrg, sprVel, duration, minSize, maxSize);
+			}
+			
+			//ang = rand() % 360;
+			//VectorCopy( dir, nAxis[0] );
+			//RotateAroundDirection( nAxis, ang );
+
+			//Com_Printf("normal: %f, %f, %f\n", dir[0], dir[1], dir[2]);
+			//Com_Printf("axis: %f, %f, %f\n", nAxis[1][0], nAxis[1][1], nAxis[1][2]);
+			//Com_Printf("axis: %f, %f, %f\n", nAxis[2][0], nAxis[2][1], nAxis[2][2]);
+
+			//RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, degrees);
+			//RotatePointAroundVector( vec3_origin, dir, origin, 20);
+				
+			//le = CG_MakeExplosion( origin, dir, cgs.media.ringFlashModel,	cgs.media.railExplosionShader, 1000, qfalse );
+
+			//mod = cgs.media.ringFlashModel;
+			//shader = cgs.media.railExplosionShader;
+		}
 		break;
 	case WP_ROCKET_LAUNCHER:
 		mod = cgs.media.dishFlashModel;
 		shader = cgs.media.rocketExplosionShader;
 		sfx = cgs.media.sfx_rockexp;
 		mark = cgs.media.burnMarkShader;
-		radius = 64;
-		light = 300;
+		radius = (crandom() * 40) + 70;
+		light = (crandom() * 500) + 600;
 		isSprite = qtrue;
-		duration = 1000;
+		duration = fabs(crandom()* 50) + 100 * scale;
 		lightColor[0] = 1;
 		lightColor[1] = 0.75;
-		lightColor[2] = 0.0;
+		lightColor[2] = 0;
+
+		//scale = .54;
+		scale = 1;
+		scale = fabs(crandom() * .25) + .74;
+
 		if (cg_oldRocket.integer == 0) {
 			// explosion sprite animation
 			VectorMA( origin, 24, dir, sprOrg );
-			VectorScale( dir, 64, sprVel );
+			VectorScale( dir, 64, sprVel ); 
 
-			CG_ParticleExplosion( "explode1", sprOrg, sprVel, 1400, 20, 30 );
+			sprVel[2] = 1000 + (crandom()* 500) * scale;
+			CG_ParticleExplosion( "explode1", sprOrg, sprVel, 150 , 20  * scale, 400  * scale );
+			sprVel[2] = 50 + (crandom()* 250)  * scale;
+
+
+			duration = (crandom() * 50) + 100;
+			minSize = ((crandom() * 200) + 100) * scale;
+			maxSize = ((crandom() * 10) + 10) * scale;
+
+
+			CG_ParticleExplosion( "explode1", sprOrg, sprVel, fabs(crandom() * 100) + 250,
+			//might be cool if i could make custome falling smoke trails
+					((crandom() * 200) + 100)  * scale,
+					((crandom() * 10) + 10)  * scale);
+
+			Com_Printf("%f, %f, %f\n", dir[0], dir[1], dir[2]);
+			vectoangles(dir, angles);
+			Com_Printf("%f, %f, %f\n", angles[0], angles[1], angles[2]);
+
+			for(i = 0; i < 20; i++){
+
+
+			//void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point,
+
+				sprVel[0] = crandom() * 5000 * scale;
+				sprVel[1] = crandom() * 5000 * scale;
+				sprVel[2] = crandom() * 5000 * scale;
+
+				duration = (crandom() * 50) + 100;
+				minSize = ((crandom() * 200) + 100) * scale;
+				maxSize = ((crandom() * 10) + 10) * scale;
+
+
+				CG_ParticleExplosion( "explode1", sprOrg, sprVel, duration,
+					minSize,
+					maxSize) ;
+
+				//the particles that are launched  should launch an entity in smae direction that creates smoke puffs when it touches surfaces that move in deflected direction of flames and falls with gravity
+				CG_RocketFragment(sprOrg, sprVel, duration, minSize, maxSize);
+			}
+
+		//	//eject smoke puffs in radius around explosion
+
+
 		}
 		break;
 	case WP_RAILGUN:
 		mod = cgs.media.ringFlashModel;
-		shader = cgs.media.railExplosionShader;
+		shader = cgs.media.rocketExplosionShader;
+
+
+
+		//copied from RL
+
+					scale = .1;
+			
+					// explosion sprite animation
+					VectorMA( origin, 24, dir, sprOrg );
+					VectorScale( dir, 64, sprVel ); 
+
+					sprVel[2] = 1000 + (crandom()* 500) * scale;
+					CG_ParticleExplosion( "explode1", sprOrg, sprVel, 150 , 20  * scale, 400  * scale );
+					sprVel[2] = 50 + (crandom()* 250)  * scale;
+
+
+					duration = (crandom() * 50) + 100;
+					minSize = fabs((crandom() * 200) + 100) * scale;
+					maxSize = fabs((crandom() * 10) + 10) * scale;
+
+
+					CG_ParticleExplosion( "explode1", sprOrg, sprVel, fabs(crandom() * 100) + 250,
+					//might be cool if i could make custome falling smoke trails
+							((crandom() * 200) + 100)  * scale,
+							((crandom() * 10) + 10)  * scale);
+
+					Com_Printf("%f, %f, %f\n", dir[0], dir[1], dir[2]);
+					vectoangles(dir, angles);
+					Com_Printf("%f, %f, %f\n", angles[0], angles[1], angles[2]);
+
+					for(i = 0; i < 20; i++){
+
+
+						//RotatePointAroundVector(axis[i], vec, temp, i * 10);//banshee 2.4 was 10
+
+						sprVel[0] = crandom() * 5000 * scale;
+						sprVel[1] = crandom() * 5000 * scale;
+						sprVel[2] = crandom() * 5000 * scale;
+
+						duration = (crandom() * 50) + 100;
+						minSize = ((crandom() * 200) + 100) * scale;
+						maxSize = ((crandom() * 10) + 10) * scale;
+
+
+						CG_ParticleExplosion( "explode1", sprOrg, sprVel, duration,
+							minSize,
+							maxSize) ;
+
+						//the particles that are launched  should launch an entity in smae direction that creates smoke puffs when it touches surfaces that move in deflected direction of flames and falls with gravity
+						CG_RocketFragment(sprOrg, sprVel, duration, minSize, maxSize);
+					}
+		//copied from RL
+
+
 		sfx = cgs.media.sfx_plasmaexp;
 		mark = cgs.media.energyMarkShader;
-		radius = 24;
+		light = 600;
+		//duration = 500;
+		duration = fabs(crandom()* 50) + 100 * scale;
+		radius = 74;
+		lightColor[0] = .45;
+		lightColor[1] = .45;
+		lightColor[2] = 1;
 		break;
 	case WP_PLASMAGUN:
 		mod = cgs.media.ringFlashModel;
 		shader = cgs.media.plasmaExplosionShader;
 		sfx = cgs.media.sfx_plasmaexp;
 		mark = cgs.media.energyMarkShader;
-		radius = 16;
+		radius = 8;
+
+
+
+
+
+		lightColor[0] = 0.6f;
+		lightColor[1] = 0.6f;
+		lightColor[2] = 1.0f;
 		break;
 	case WP_BFG:
 		mod = cgs.media.dishFlashModel;
 		shader = cgs.media.bfgExplosionShader;
 		sfx = cgs.media.sfx_rockexp;
 		mark = cgs.media.burnMarkShader;
-		radius = 32;
+		radius = 80;
 		isSprite = qtrue;
+		lightColor[0] = 1.0f;
+		lightColor[1] = .7f;
+		lightColor[2] = 1.0f;
 		break;
 	case WP_SHOTGUN:
 		mod = cgs.media.bulletFlashModel;
 		shader = cgs.media.bulletExplosionShader;
 		mark = cgs.media.bulletMarkShader;
 		sfx = 0;
+
 		radius = 4;
+		duration = 50; 
+		light = fabs(crandom() * 100) + 200;
+		lightColor[0] = .15 + scale;
+		lightColor[1] = .15 + scale;
+		lightColor[2] = 0;
 		break;
 
 #ifdef MISSIONPACK
@@ -1906,6 +2309,14 @@ void CG_MissileHitWall( int weapon, int clientNum, vec3_t origin, vec3_t dir, im
 		mod = cgs.media.bulletFlashModel;
 		shader = cgs.media.bulletExplosionShader;
 		mark = cgs.media.bulletMarkShader;
+		
+		scale =  (fabs(crandom() * 1))/2;
+
+		duration = 50; 
+		light = 100;
+		lightColor[0] = .5 + scale;
+		lightColor[1] = .5 + scale;
+		lightColor[2] = 0;
 
 		r = rand() & 3;
 		if ( r == 0 ) {
@@ -1927,10 +2338,27 @@ void CG_MissileHitWall( int weapon, int clientNum, vec3_t origin, vec3_t dir, im
 	//
 	// create the explosion
 	//
+
 	if ( mod ) {
 		le = CG_MakeExplosion( origin, dir, 
 							   mod,	shader,
 							   duration, isSprite );
+
+
+		
+		if ( weapon == WP_RAILGUN || weapon == WP_ROCKET_LAUNCHER) {
+			le2 = &le;
+
+			isSprite = qfalse;
+			mod = cgs.media.ringFlashModel;
+			duration = 600;
+			shader = cgs.media.railExplosionShader;
+
+			le2 = CG_MakeExplosion( origin, dir, 
+								   mod,	shader,
+								   duration, isSprite );
+		}
+
 		le->light = light;
 		VectorCopy( lightColor, le->lightColor );
 		if ( weapon == WP_RAILGUN ) {
@@ -2062,8 +2490,9 @@ static void CG_ShotgunPattern( vec3_t origin, vec3_t origin2, int seed, int othe
 
 	// generate the "random" spread pattern
 	for ( i = 0 ; i < DEFAULT_SHOTGUN_COUNT ; i++ ) {
-		r = Q_crandom( &seed ) * DEFAULT_SHOTGUN_SPREAD * 16;
-		u = Q_crandom( &seed ) * DEFAULT_SHOTGUN_SPREAD * 16;
+		//not in etxreal
+		r = Q_crandom( &seed ) * DEFAULT_SHOTGUN_SPREAD * 2;
+		u = Q_crandom( &seed ) * DEFAULT_SHOTGUN_SPREAD * 2;
 		VectorMA( origin, 8192 * 16, forward, end);
 		VectorMA (end, r, right, end);
 		VectorMA (end, u, up, end);
@@ -2199,7 +2628,7 @@ static qboolean	CG_CalcMuzzlePoint( int entityNum, vec3_t muzzle ) {
 
 	if ( entityNum == cg.snap->ps.clientNum ) {
 		VectorCopy( cg.snap->ps.origin, muzzle );
-		muzzle[2] += cg.snap->ps.viewheight;
+		muzzle[2] += cg.snap->ps.viewPos[1];
 		AngleVectors( cg.snap->ps.viewangles, forward, NULL, NULL );
 		VectorMA( muzzle, 14, forward, muzzle );
 		return qtrue;

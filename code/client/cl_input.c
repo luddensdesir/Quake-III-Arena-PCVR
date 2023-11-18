@@ -50,7 +50,14 @@ at the same time.
 kbutton_t	in_left, in_right, in_forward, in_back;
 kbutton_t	in_lookup, in_lookdown, in_moveleft, in_moveright;
 kbutton_t	in_strafe, in_speed;
+
+//wwc
 kbutton_t	in_up, in_down;
+kbutton_t	in_righthand, in_lefthand;
+kbutton_t	in_aimswitch, in_unlockaim;
+
+kbutton_t	in_sprint, in_aim;
+kbutton_t	in_gapUp, in_gapDown;
 
 kbutton_t	in_buttons[16];
 
@@ -211,6 +218,32 @@ void IN_MoveleftUp(void) {IN_KeyUp(&in_moveleft);}
 void IN_MoverightDown(void) {IN_KeyDown(&in_moveright);}
 void IN_MoverightUp(void) {IN_KeyUp(&in_moveright);}
 
+//wwc
+void IN_SprintDown(void) {IN_KeyDown(&in_sprint);}
+void IN_SprintUp(void) {IN_KeyUp(&in_sprint);}
+
+void IN_AimDown(void) {IN_KeyDown(&in_aim);}
+void IN_AimUp(void) {IN_KeyUp(&in_aim);}
+
+void IN_GapDownDown(void) {IN_KeyDown(&in_gapDown);}
+void IN_GapDownUp(void) {IN_KeyUp(&in_gapDown);}
+
+void IN_GapUpDown(void) {IN_KeyUp(&in_gapUp);}
+void IN_GapUpUp(void) {IN_KeyDown(&in_gapUp);}
+
+void IN_LeftHandDown(void) {IN_KeyDown(&in_lefthand);}
+void IN_LeftHandUp(void) {IN_KeyUp(&in_lefthand);}
+
+void IN_RightHandDown(void) {IN_KeyDown(&in_righthand);}
+void IN_RightHandUp(void) {IN_KeyUp(&in_righthand);}
+
+void IN_AimUnlock(void) {IN_KeyDown(&in_unlockaim);}
+void IN_AimLock(void) {IN_KeyUp(&in_unlockaim);}
+
+void IN_AimInvert(void) {IN_KeyDown(&in_aimswitch);}
+void IN_AimRevert(void) {IN_KeyUp(&in_aimswitch);}
+//wwc
+
 void IN_SpeedDown(void) {IN_KeyDown(&in_speed);}
 void IN_SpeedUp(void) {IN_KeyUp(&in_speed);}
 void IN_StrafeDown(void) {IN_KeyDown(&in_strafe);}
@@ -318,9 +351,59 @@ void CL_KeyMove( usercmd_t *cmd ) {
 		movespeed = 127;
 		cmd->buttons &= ~BUTTON_WALKING;
 	} else {
-		cmd->buttons |= BUTTON_WALKING;
 		movespeed = 64;
+		cmd->buttons |= BUTTON_WALKING;
 	}
+ 
+	//wwc
+	if ( in_sprint.active ) {
+		cmd->buttons |= BUTTON_SPRINT;
+	} else {
+		cmd->buttons &= ~BUTTON_SPRINT;
+	} 
+	if ( in_gapUp.active ) {
+		cmd->buttons |= BUTTON_GAPUP;
+	} else {
+		cmd->buttons &= ~BUTTON_GAPUP;
+	} 
+	if ( in_gapDown.active ) {
+		cmd->buttons |= BUTTON_GAPDOWN;
+	} else {
+		cmd->buttons &= ~BUTTON_GAPDOWN;
+	} 
+
+	if ( in_aim.active ) {
+		cmd->buttons |= BUTTON_AIM;
+	} else {
+		cmd->buttons &= ~BUTTON_AIM;
+	}
+ 
+	if ( in_lefthand.active ) {
+		cmd->buttons |= BUTTON_HAND_LEFT;
+	} else {
+		cmd->buttons &= ~BUTTON_HAND_LEFT;
+	} 
+
+	if ( in_righthand.active ) {
+		cmd->buttons |= BUTTON_HAND_RIGHT;
+	} else {
+		cmd->buttons &= ~BUTTON_HAND_RIGHT;
+	}
+
+	if ( in_unlockaim.active ) {
+		cmd->buttons |= BUTTON_UNLOCK_AIM;
+	} else {
+		cmd->buttons &= ~BUTTON_UNLOCK_AIM;
+	} 
+
+	if ( in_aimswitch.active ) {
+		cmd->buttons |= BUTTON_AIM_SWITCH;
+	} else {
+		cmd->buttons &= ~BUTTON_AIM_SWITCH;
+	}
+ 
+	//Com_Printf("%i ", in_aimswitch.active );
+	//Com_Printf("%i \n", cmd->buttons );
 
 	forward = 0;
 	side = 0;
@@ -343,6 +426,25 @@ void CL_KeyMove( usercmd_t *cmd ) {
 	cmd->forwardmove = ClampChar( forward );
 	cmd->rightmove = ClampChar( side );
 	cmd->upmove = ClampChar( up );
+}
+/*
+=================
+CL_HMDEvent
+=================
+*/
+void CL_HMDEvent( int ax, int ay, int az, int aw, int time ) {
+
+
+	//if ( cls.keyCatchers & KEYCATCH_UI ) {
+	//	//VM_Call( uivm, UI_MOUSE_EVENT, dx, dy );
+	//} else if (cls.keyCatchers & KEYCATCH_CGAME) {
+	//	//VM_Call (cgvm, CG_HMD_EVENT, dx, dy);
+	//} else {
+	//	cl.hmdX -= .5 * ax;
+	//	cl.hmdY += .5 * ay;
+	//	cl.hmdZ -= .5 * az;
+
+	//}
 }
 
 /*
@@ -463,6 +565,8 @@ void CL_MouseMove( usercmd_t *cmd ) {
 	} else {
 		cmd->forwardmove = ClampChar( cmd->forwardmove - m_forward->value * my );
 	}
+
+	//Com_Printf(" %f, %f\n", cl.viewangles[YAW], cl.viewangles[PITCH]);
 }
 
 
@@ -512,6 +616,14 @@ void CL_FinishMove( usercmd_t *cmd ) {
 	// send the current server time so the amount of movement
 	// can be determined without allowing cheating
 	cmd->serverTime = cl.serverTime;
+
+	//cmd->hangles[0] = cl.hmdX;
+	//cmd->hangles[1] = cl.hmdY;
+	//cmd->hangles[2] = cl.hmdZ;
+	//cmd->hangles[3] = cl.hmdW;
+
+	//Com_Printf("  %i, %i, %i, %i \n", cl.hmdX, cl.hmdY, cl.hmdZ, cl.hmdW);
+	//Com_Printf("  %i, %i, %i, %i \n", cmd->hangles[0], cmd->hangles[1], cmd->hangles[2], cmd->hangles[3]);
 
 	for (i=0 ; i<3 ; i++) {
 		cmd->angles[i] = ANGLE2SHORT(cl.viewangles[i]);
@@ -859,6 +971,33 @@ void CL_InitInput( void ) {
 	Cmd_AddCommand ("-moveleft", IN_MoveleftUp);
 	Cmd_AddCommand ("+moveright", IN_MoverightDown);
 	Cmd_AddCommand ("-moveright", IN_MoverightUp);
+
+	//wwc
+	Cmd_AddCommand ("+sprint", IN_SprintDown);
+	Cmd_AddCommand ("-sprint", IN_SprintUp);
+
+	Cmd_AddCommand ("+aim", IN_AimDown);
+	Cmd_AddCommand ("-aim", IN_AimUp);
+
+	Cmd_AddCommand ("+gapUp", IN_GapUpUp);
+	Cmd_AddCommand ("-gapUp", IN_GapUpDown);
+
+	Cmd_AddCommand ("+gapDown", IN_GapDownDown);
+	Cmd_AddCommand ("-gapDown", IN_GapDownUp);
+
+	Cmd_AddCommand ("+handleft", IN_LeftHandDown);
+	Cmd_AddCommand ("-handleft", IN_LeftHandUp);
+
+	Cmd_AddCommand ("+handright", IN_RightHandDown);
+	Cmd_AddCommand ("-handright", IN_RightHandUp);
+
+	Cmd_AddCommand ("+aimlock", IN_AimUnlock);
+	Cmd_AddCommand ("-aimlock", IN_AimLock);
+
+	Cmd_AddCommand ("+aimswitch", IN_AimInvert);
+	Cmd_AddCommand ("-aimswitch", IN_AimRevert);
+	//wwc
+
 	Cmd_AddCommand ("+speed", IN_SpeedDown);
 	Cmd_AddCommand ("-speed", IN_SpeedUp);
 	Cmd_AddCommand ("+attack", IN_Button0Down);

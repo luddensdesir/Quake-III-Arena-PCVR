@@ -26,7 +26,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 // q_shared.h -- included first by ALL program modules.
 // A user mod should never modify this file
 
-#define	Q3_VERSION		"Q3 1.32b"
+#define	Q3_VERSION		"WWC"
 // 1.32 released 7-10-2002
 
 #define MAX_TEAMNAME 32
@@ -71,6 +71,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
   you will have to add your own version for support in the VM.
 
  **********************************************************************/
+
+#define OVR_CAPI_NO_UTILS
+
+/*
+#include "../../mlibs/libovr/Include/OVR_CAPI_0_8_0.h"
+#include "../../mlibs/libovr/Include/OVR_CAPI_GL.h"
+
+#include "C:\Quake3\source\WWC (1_2018)\mlibs\libovr\Include\OVR_CAPI.h"
+#include "C:\Quake3\source\WWC (1_2018)\mlibs\libovr\Include\OVR_CAPI_GL.h" */
 
 #ifdef Q3_VM
 
@@ -613,6 +622,7 @@ void ByteToDir( int b, vec3_t dir );
 #define VectorAdd(a,b,c)		((c)[0]=(a)[0]+(b)[0],(c)[1]=(a)[1]+(b)[1],(c)[2]=(a)[2]+(b)[2])
 #define VectorCopy(a,b)			((b)[0]=(a)[0],(b)[1]=(a)[1],(b)[2]=(a)[2])
 #define	VectorScale(v, s, o)	((o)[0]=(v)[0]*(s),(o)[1]=(v)[1]*(s),(o)[2]=(v)[2]*(s))
+// VectorMA(v,s,b,o) - make b s units long, add to v, result in o 
 #define	VectorMA(v, s, b, o)	((o)[0]=(v)[0]+(b)[0]*(s),(o)[1]=(v)[1]+(b)[1]*(s),(o)[2]=(v)[2]+(b)[2]*(s))
 
 #else
@@ -1173,9 +1183,7 @@ typedef struct playerState_s {
 								// when at rest, the value will remain unchanged
 								// used to twist the legs during strafing
 
-	vec3_t		grapplePoint;	// location of grapple to pull towards if PMF_GRAPPLE_PULL
-
-	int			eFlags;			// copied to entityState_t->eFlags
+	int			eFlags;			// copied to entityState_t-`>eFlags
 
 	int			eventSequence;	// pmove generated events
 	int			events[MAX_PS_EVENTS];
@@ -1189,8 +1197,6 @@ typedef struct playerState_s {
 	int			weapon;			// copied to entityState_t->weapon
 	int			weaponstate;
 
-	vec3_t		viewangles;		// for fixed views
-	int			viewheight;
 
 	// damage feedback
 	int			damageEvent;	// when it changes, latch the other parms
@@ -1204,16 +1210,62 @@ typedef struct playerState_s {
 	int			ammo[MAX_WEAPONS];
 
 	int			generic1;
-	int			loopSound;
-	int			jumppad_ent;	// jumppad entity hit this frame
 
 	// not communicated over the net at all
 	int			ping;			// server to game info for scoreboard
 	int			pmove_framecount;	// FIXME: don't transmit over the network
 	int			jumppad_frame;
 	int			entityEventSequence;
+
+	vec3_t		grapplePoint;	// location of grapple to pull towards if PMF_GRAPPLE_PULL
+	int			jumppad_ent;	// jumppad entity hit this frame
+	int			loopSound;
+
+	//ZCM 
+	//ZCM 
+	//ZCM 
+	vec3_t		viewPos;	
+	vec3_t		viewangles;		// for fixed views
+	vec3_t		weaponAngles;	// zcm
+
+
+	//there are better ways to send spread and kick info
+	vec3_t		weapAngKick;	
+	vec3_t		viewangKick;	
+	vec3_t		viewPosSpread;	
+	vec3_t		weapPosSpread;	 
+
+	vec4_t		hmdAngles;		//head mounted display
+
+	vec3_t		weaponOffset;	// zcm
+
+	float		weapAngLerpFrac;
+	float		viewAngLerpFrac; 
+	float		weapPosLerpFrac; //since I can't figure out how to do the angle lerp the same way as position lerp
+	float		viewPosLerpFrac; 
+
+	float		maxSightsGap;
+	float		maxBaseGap;
+	float		gapLerp;
+	float		lastStance;
+
+	int			pm_weapFlags;	//currently used for switching hands and zooming, but will be replaced with +switchLft and +switchRight or +switchHand
+	int			oldAngles[3]; // can this be saved in pml like old velocity and origin in line 3095? of bg_pmove
+	int			lastHand;
+	float		switchingParent; 
+	int			swapGap[2];
+
+	int			module;		//to check which aspect of a predicted ps object is being represented somewhere
+	int			zoomed;
+
+	//int			vrEnabled;
+	//int			hmdAngles;
 } playerState_t;
 
+typedef struct riftState_s{
+	int		initialized;
+	int		active;
+} riftState_t;
 
 //====================================================================
 
@@ -1231,15 +1283,25 @@ typedef struct playerState_s {
 										// only generate a small move value for that frame
 										// walking will use different animations and
 										// won't generate footsteps
-#define BUTTON_AFFIRMATIVE	32
-#define	BUTTON_NEGATIVE		64
+//#define BUTTON_AFFIRMATIVE	32
+//#define	BUTTON_NEGATIVE		64
 
-#define BUTTON_GETFLAG		128
-#define BUTTON_GUARDBASE	256
-#define BUTTON_PATROL		512
-#define BUTTON_FOLLOWME		1024
+//#define BUTTON_GETFLAG		128
+//#define BUTTON_GUARDBASE	256
+//#define BUTTON_PATROL		512
+//#define BUTTON_FOLLOWME		1024
 
 #define	BUTTON_ANY			2048			// any key whatsoever
+#define	BUTTON_SPRINT 4096
+#define	BUTTON_AIM 8192
+
+#define	BUTTON_HAND_LEFT 16384
+#define	BUTTON_HAND_RIGHT 32768
+
+#define	BUTTON_UNLOCK_AIM 256
+#define	BUTTON_AIM_SWITCH 32
+#define	BUTTON_GAPUP 64
+#define	BUTTON_GAPDOWN 128
 
 #define	MOVE_RUN			120			// if forwardmove or rightmove are >= MOVE_RUN,
 										// then BUTTON_WALKING should be set
@@ -1248,6 +1310,7 @@ typedef struct playerState_s {
 typedef struct usercmd_s {
 	int				serverTime;
 	int				angles[3];
+	int				hangles[4];
 	int 			buttons;
 	byte			weapon;           // weapon 
 	signed char	forwardmove, rightmove, upmove;
@@ -1295,6 +1358,9 @@ typedef struct entityState_s {
 
 	vec3_t	origin;
 	vec3_t	origin2;
+
+	vec3_t	origin3;
+	vec3_t	origin4; //ZCM
 
 	vec3_t	angles;
 	vec3_t	angles2;
@@ -1430,3 +1496,13 @@ typedef enum _flag_status {
 
 
 #endif	// __Q_SHARED_H
+
+#define QuatInit(w,x,y,z,q) ((q)[0]=(w),(q)[1]=(x),(q)[2]=(y),(q)[3]=(z));
+
+
+//located in q_math.c
+//http://icculus.org/~phaethon/q3a/misc/quats.html
+void AnglesToQuat (const vec3_t angles, vec4_t quat);
+void QuatToAxis(vec4_t q, vec3_t m[3]);
+void QuatMul(const vec4_t q1, const vec4_t q2, vec4_t res);
+void QuatToAngles (const vec4_t q, vec3_t a);

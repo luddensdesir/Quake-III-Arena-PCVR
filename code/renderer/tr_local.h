@@ -24,6 +24,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef TR_LOCAL_H
 #define TR_LOCAL_H
 
+//#include "../oculus/ovr_session.h"
+
 #include "../game/q_shared.h"
 #include "../qcommon/qfiles.h"
 #include "../qcommon/qcommon.h"
@@ -1559,6 +1561,8 @@ typedef enum {
 // the main view, all the 3D icons, etc
 #define	MAX_POLYS		600
 #define	MAX_POLYVERTS	3000
+//#define	MAX_POLYS		10000000
+//#define	MAX_POLYVERTS	40000000
 
 // all of the information needed by the back end must be
 // contained in a backEndData_t.  This entire structure is

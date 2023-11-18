@@ -26,7 +26,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "cg_local.h"
 
-#define	MAX_LOCAL_ENTITIES	512
+//#define	MAX_LOCAL_ENTITIES	512
+#define	MAX_LOCAL_ENTITIES	768
 localEntity_t	cg_localEntities[MAX_LOCAL_ENTITIES];
 localEntity_t	cg_activeLocalEntities;		// double linked list
 localEntity_t	*cg_freeLocalEntities;		// single linked list
@@ -119,31 +120,116 @@ Leave expanding blood puffs behind gibs
 ================
 */
 void CG_BloodTrail( localEntity_t *le ) {
+
+	//	int		t;
+	//int		t2;
+	//int		step;
+	//vec3_t	newOrigin;
+	//localEntity_t	*blood;
+
+	//step = 150;
+	//t = step * ( (cg.time - cg.frametime + step ) / step );
+	//t2 = step * ( cg.time / step );
+
+	//for ( ; t <= t2; t += step ) {
+	//	BG_EvaluateTrajectory( &le->pos, t, newOrigin );
+
+	//	blood = CG_SmokePuff( newOrigin, vec3_origin, 
+	//				  20,		// radius
+	//				  1, 1, 1, 1,	// color
+	//				  2000,		// trailTime
+	//				  t,		// startTime
+	//				  0,		// fadeInTime
+	//				  0,		// flags
+	//				  cgs.media.bloodTrailShader );
+	//	// use the optimized version
+	//	blood->leType = LE_FALL_SCALE_FADE;
+	//	// drop a total of 40 units over its lifetime
+	//	blood->pos.trDelta[2] = 40;
+	//}
+
+
 	int		t;
 	int		t2;
 	int		step;
 	vec3_t	newOrigin;
+	vec3_t	delta;
 	localEntity_t	*blood;
+	float speed;
+	float size;
+	float sizeRand;
+	float floatSize;
+	float vaporSpeed;
+	float trailTime;
+	float trailTimeRand;
+	float alphaDrop;
+	qhandle_t randShader;
 
-	step = 150;
-	t = step * ( (cg.time - cg.frametime + step ) / step );
+	vaporSpeed = 0;
+
+	step = (fabs(crandom()) * 15) + 85;
+ 	t = step * ( (cg.time - cg.frametime + step ) / step );
 	t2 = step * ( cg.time / step );
 
 	for ( ; t <= t2; t += step ) {
+		BG_EvaluateTrajectoryDelta( &le->pos, t, delta );
 		BG_EvaluateTrajectory( &le->pos, t, newOrigin );
 
+		//the faster the gib moves the larger it is.
+		//the larger it is the faster it disappears and falls from gravity
+
+		if( delta[2] < 0){
+			vaporSpeed = fabs(delta[2]/40);
+		}
+
+		speed = sqrt( delta[0] * delta[0] + delta[1] * delta[1] + delta[2] * delta[2])/60;
+		speed*=speed;
+		sizeRand = (crandom() * crandom() * 100);
+		size = sizeRand + ((speed)) + 10;
+
+
+		trailTimeRand = ((crandom()) * 150000);
+		//trailTimeRand = 0;
+		//vaporSpeed = 0;
+
+		trailTime = fabs((trailTimeRand/(size) + (60000/( (size/2) ))) - (vaporSpeed));
+
+
+		if(trailTime > 30000){
+			trailTime = 30000;
+		} 
+
+		//Com_Printf("%f\n", size);
+		alphaDrop = (size * (1/1600.f));
+		alphaDrop = 1 - alphaDrop;
+		if(alphaDrop <= .2){
+			alphaDrop = .2;
+		}
+		//Com_Printf("%f\n", alphaDrop);
+
+		//if(crandom() > -.975){
+			randShader = cgs.media.bloodTrailShader;
+		//} else {cgs.media.railExplosionShader
+			//randShader = cgs.media.rocketExplosionShader;
+		//}
+
 		blood = CG_SmokePuff( newOrigin, vec3_origin, 
-					  20,		// radius
-					  1, 1, 1, 1,	// color
-					  2000,		// trailTime
+					   size,		// radius
+					  (fabs(crandom()) * .5) + .5, ( fabs(crandom()) * .5) + .5, (fabs(crandom()) * .5) + .5, alphaDrop,	// color
+					   trailTime + 200,		// trailTime
 					  t,		// startTime
 					  0,		// fadeInTime
 					  0,		// flags
-					  cgs.media.bloodTrailShader );
-		// use the optimized version
-		blood->leType = LE_FALL_SCALE_FADE;
-		// drop a total of 40 units over its lifetime
-		blood->pos.trDelta[2] = 40;
+					  //cgs.media.waterBubbleShader );
+					  randShader);
+
+		blood->leType = LE_MOVE_SCALE_FADE;
+
+		floatSize = -((size/5) - 10);
+
+		blood->pos.trDelta[0] = (crandom() * (size / 5));
+		blood->pos.trDelta[1] = (crandom() * (size / 5));
+		blood->pos.trDelta[2] = (crandom() * (size/15)) + floatSize;
 	}
 }
 
@@ -235,6 +321,17 @@ void CG_ReflectVelocity( localEntity_t *le, trace_t *trace ) {
 	} else {
 
 	}
+
+	if (le->leFlags & LEF_TUMBLE)
+	{
+		// collided with a surface so calculate the new rotation axis
+		CrossProduct (trace->plane.normal, velocity, le->rotAxis);
+		le->angVel = VectorNormalize (le->rotAxis) / le->radius;
+		// save current orientation as a rotation from model's base orientation
+		QuatMul (le->quatOrient, le->quatRot, le->quatRot);
+		// reset the orientation
+		QuatInit(1,0,0,0,le->quatOrient);
+	}
 }
 
 /*
@@ -278,22 +375,34 @@ void CG_AddFragment( localEntity_t *le ) {
 		// still in free fall
 		VectorCopy( newOrigin, le->refEntity.origin );
 
-		if ( le->leFlags & LEF_TUMBLE ) {
-			vec3_t angles;
-
-			BG_EvaluateTrajectory( &le->angles, cg.time, angles );
-			AnglesToAxis( angles, le->refEntity.axis );
+		if (le->leFlags & LEF_TUMBLE)
+		{
+			vec4_t qrot;
+			// angular rotation for this frame
+			float angle = le->angVel * (cg.time - le->angles.trTime) * 0.001/2;
+			// create the rotation quaternion
+			qrot[0] = cos (angle); // real part
+			VectorScale (le->rotAxis, sin(angle), &qrot[1]);// imaginary part
+			// create the new orientation
+			QuatMul (le->quatOrient, qrot, le->quatOrient);
+			// apply the combined previous rotations around other axes
+			QuatMul (le->quatOrient, le->quatRot, qrot);
+			// convert the orientation into the form the renderer wants
+			QuatToAxis (qrot, le->refEntity.axis);
+			le->angles.trTime = cg.time;
 		}
 
 		trap_R_AddRefEntityToScene( &le->refEntity );
 
 		// add a blood trail
+		
 		if ( le->leBounceSoundType == LEBS_BLOOD ) {
 			CG_BloodTrail( le );
 		}
 
 		return;
 	}
+
 
 	// if it is in a nodrop zone, remove it
 	// this keeps gibs from waiting at the bottom of pits of death
@@ -519,7 +628,8 @@ static void CG_AddSpriteExplosion( localEntity_t *le ) {
 	re.radius = 42 * ( 1.0 - c ) + 30;
 
 	trap_R_AddRefEntityToScene( &re );
-
+	
+	//le->leType = LE_MOVE_SCALE_FADE;
 	// add the dlight
 	if ( le->light ) {
 		float		light;

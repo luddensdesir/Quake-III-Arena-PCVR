@@ -30,6 +30,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "../cgame/cg_public.h"
 #include "../game/bg_public.h"
 
+//#include "../oculus/ovr_session.h"
+
 #define	RETRANSMIT_TIMEOUT	3000	// time between connection packet retransmits
 
 
@@ -98,6 +100,8 @@ typedef struct {
 	char		mapname[MAX_QPATH];	// extracted from CS_SERVERINFO
 
 	int			parseEntitiesNum;	// index (not anded off) into cl_parse_entities[]
+
+	//int			hmdX, hmdY, hmdZ, hmdW; //HMD movement
 
 	int			mouseDx[2], mouseDy[2];	// added to by mouse events
 	int			mouseIndex;

@@ -907,6 +907,11 @@ be freed by the game later.
 ================
 */
 void Sys_QueEvent( int time, sysEventType_t type, int value, int value2, int ptrLength, void *ptr ) {
+	Sys_QueEvent4( time, type, value, value2, 0, 0, ptrLength, ptr );
+}
+
+
+void Sys_QueEvent4( int time, sysEventType_t type, int value, int value2, int value3, int value4, int ptrLength, void *ptr ) {
 	sysEvent_t	*ev;
 
 	ev = &eventQue[ eventHead & MASK_QUED_EVENTS ];
@@ -929,6 +934,8 @@ void Sys_QueEvent( int time, sysEventType_t type, int value, int value2, int ptr
 	ev->evType = type;
 	ev->evValue = value;
 	ev->evValue2 = value2;
+	ev->evValue3 = value3;
+	ev->evValue4 = value4;
 	ev->evPtrLength = ptrLength;
 	ev->evPtr = ptr;
 }

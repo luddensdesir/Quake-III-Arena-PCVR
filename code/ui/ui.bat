@@ -7,6 +7,8 @@ cd vm
 
 set cc=lcc -DMISSIONPACK -DQ3_VM -S -Wf-target=bytecode -Wf-g -I..\..\cgame -I..\..\game -I..\..\ui %1
 
+%cc% ../../game/bg_promode.c
+@if errorlevel 1 goto quit
 %cc% ../ui_main.c
 @if errorlevel 1 goto quit
 %cc% ../../game/bg_misc.c

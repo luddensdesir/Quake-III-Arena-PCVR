@@ -1380,6 +1380,10 @@ static void CG_PlayerAngles( centity_t *cent, vec3_t legs[3], vec3_t torso[3], v
 	float		speed;
 	int			dir, clientNum;
 	clientInfo_t	*ci;
+	static float  mult;
+	static float  ramp = 1;
+	static float  lastZedVel;//zcm
+
 
 	VectorCopy( cent->lerpAngles, headAngles );
 	headAngles[YAW] = AngleMod( headAngles[YAW] );
@@ -1447,18 +1451,44 @@ static void CG_PlayerAngles( centity_t *cent, vec3_t legs[3], vec3_t torso[3], v
 	if ( speed ) {
 		vec3_t	axis[3];
 		float	side;
+		float slowForward = 1;//zcm
+
+		//zcm
+		if(velocity[2] < 0){
+
+			ramp *= 1.01;
+			mult = 1 + (velocity[2] * ramp);
+		} else if (velocity[2] > 0){
+			ramp *= 1.01;
+			mult = 1 + (velocity[2] * ramp);
+		} else if ((velocity[2] == 0) && (lastZedVel == 0)){
+			mult = ramp;
+			slowForward = .25;
+		} 
 
 		speed *= 0.05f;
 
 		AnglesToAxis( legsAngles, axis );
-		side = speed * DotProduct( velocity, axis[1] );
+		side = speed * cg_PlayerLean.integer * mult * DotProduct( velocity, axis[1] );
+		if (side > 90) side = 90;
+		if (side < -90) side = -90;//zcm 
 		legsAngles[ROLL] -= side;
 
-		side = speed * DotProduct( velocity, axis[0] );
+		side = speed * cg_PlayerLean.integer * mult * slowForward * DotProduct( velocity, axis[0] );
+		if (side > 90) side = 90;
+		if (side < -90) side = -90;//zcm
 		legsAngles[PITCH] += side;
+
+		lastZedVel = velocity[2];//zcm
 	}
 
-	//
+	ramp *=  .9925;
+	if(ramp >= 1.5){
+		ramp = 1.5;
+	} else if (ramp < 1){
+		ramp = 1;
+	} //zcm
+
 	clientNum = cent->currentState.clientNum;
 	if ( clientNum >= 0 && clientNum < MAX_CLIENTS ) {
 		ci = &cgs.clientinfo[ clientNum ];
@@ -1478,6 +1508,8 @@ static void CG_PlayerAngles( centity_t *cent, vec3_t legs[3], vec3_t torso[3], v
 	AnglesToAxis( legsAngles, legs );
 	AnglesToAxis( torsoAngles, torso );
 	AnglesToAxis( headAngles, head );
+
+	lastZedVel = velocity[2]; //zcm
 }
 
 

@@ -838,12 +838,12 @@ void BotInputToUserCommand(bot_input_t *bi, usercmd_t *ucmd, int delta_angles[3]
 	if (bi->actionflags & ACTION_GESTURE) ucmd->buttons |= BUTTON_GESTURE;
 	if (bi->actionflags & ACTION_USE) ucmd->buttons |= BUTTON_USE_HOLDABLE;
 	if (bi->actionflags & ACTION_WALK) ucmd->buttons |= BUTTON_WALKING;
-	if (bi->actionflags & ACTION_AFFIRMATIVE) ucmd->buttons |= BUTTON_AFFIRMATIVE;
-	if (bi->actionflags & ACTION_NEGATIVE) ucmd->buttons |= BUTTON_NEGATIVE;
-	if (bi->actionflags & ACTION_GETFLAG) ucmd->buttons |= BUTTON_GETFLAG;
-	if (bi->actionflags & ACTION_GUARDBASE) ucmd->buttons |= BUTTON_GUARDBASE;
-	if (bi->actionflags & ACTION_PATROL) ucmd->buttons |= BUTTON_PATROL;
-	if (bi->actionflags & ACTION_FOLLOWME) ucmd->buttons |= BUTTON_FOLLOWME;
+	//if (bi->actionflags & ACTION_AFFIRMATIVE) ucmd->buttons |= BUTTON_AFFIRMATIVE;
+	//if (bi->actionflags & ACTION_NEGATIVE) ucmd->buttons |= BUTTON_NEGATIVE;
+	//if (bi->actionflags & ACTION_GETFLAG) ucmd->buttons |= BUTTON_GETFLAG;
+	//if (bi->actionflags & ACTION_GUARDBASE) ucmd->buttons |= BUTTON_GUARDBASE;
+	//if (bi->actionflags & ACTION_PATROL) ucmd->buttons |= BUTTON_PATROL;
+	//if (bi->actionflags & ACTION_FOLLOWME) ucmd->buttons |= BUTTON_FOLLOWME;
 	//
 	ucmd->weapon = bi->weapon;
 	//set the view angles
@@ -1034,7 +1034,7 @@ int BotAI(int client, float thinktime) {
 	VectorCopy(bs->cur_ps.origin, bs->origin);
 	//eye coordinates of the bot
 	VectorCopy(bs->cur_ps.origin, bs->eye);
-	bs->eye[2] += bs->cur_ps.viewheight;
+	bs->eye[2] += bs->cur_ps.viewPos[1];
 	//get the area the bot is in
 	bs->areanum = BotPointAreaNum(bs->origin);
 	//the real AI

@@ -821,6 +821,15 @@ netField_t	entityStateFields[] =
 { NETF(origin2[2]), 0 },
 { NETF(origin2[0]), 0 },
 { NETF(origin2[1]), 0 },
+
+{ NETF(origin3[2]), 0 },
+{ NETF(origin3[0]), 0 },
+{ NETF(origin3[1]), 0 },
+
+{ NETF(origin4[2]), 0 },
+{ NETF(origin4[0]), 0 },
+{ NETF(origin4[1]), 0 },
+
 { NETF(modelindex2), 8 },
 { NETF(angles[0]), 0 },
 { NETF(time), 32 },
@@ -1103,14 +1112,15 @@ netField_t	playerStateFields[] =
 { PSF(commandTime), 32 },				
 { PSF(origin[0]), 0 },
 { PSF(origin[1]), 0 },
+{ PSF(origin[2]), 0 },
+
 { PSF(bobCycle), 8 },
+
 { PSF(velocity[0]), 0 },
 { PSF(velocity[1]), 0 },
-{ PSF(viewangles[1]), 0 },
-{ PSF(viewangles[0]), 0 },
-{ PSF(weaponTime), -16 },
-{ PSF(origin[2]), 0 },
 { PSF(velocity[2]), 0 },
+
+{ PSF(weaponTime), -16 },
 { PSF(legsTimer), 8 },
 { PSF(pm_time), -16 },
 { PSF(eventSequence), 16 },
@@ -1126,9 +1136,7 @@ netField_t	playerStateFields[] =
 { PSF(externalEvent), 10 },
 { PSF(gravity), 16 },
 { PSF(speed), 16 },
-{ PSF(delta_angles[1]), 16 },
 { PSF(externalEventParm), 8 },
-{ PSF(viewheight), -8 },
 { PSF(damageEvent), 8 },
 { PSF(damageYaw), 8 },
 { PSF(damagePitch), 8 },
@@ -1136,18 +1144,85 @@ netField_t	playerStateFields[] =
 { PSF(generic1), 8 },
 { PSF(pm_type), 8 },					
 { PSF(delta_angles[0]), 16 },
+{ PSF(delta_angles[1]), 16 },
 { PSF(delta_angles[2]), 16 },
 { PSF(torsoTimer), 12 },
 { PSF(eventParms[0]), 8 },
 { PSF(eventParms[1]), 8 },
 { PSF(clientNum), 8 },
 { PSF(weapon), 5 },
-{ PSF(viewangles[2]), 0 },
+
 { PSF(grapplePoint[0]), 0 },
 { PSF(grapplePoint[1]), 0 },
 { PSF(grapplePoint[2]), 0 },
+
 { PSF(jumppad_ent), 10 },
-{ PSF(loopSound), 16 }
+
+{ PSF(loopSound), 16 },
+ 
+{ PSF(viewPos[0]), -8 },
+{ PSF(viewPos[1]), -8 },
+{ PSF(viewPos[2]), -8 },
+
+{ PSF(viewangles[1]), 0 },
+{ PSF(viewangles[0]), 0 },
+{ PSF(viewangles[2]), 0 },
+
+{ PSF(weaponAngles[0]), 0 }, //zcm
+{ PSF(weaponAngles[1]), 0 },
+{ PSF(weaponAngles[2]), 0 },
+
+{ PSF(weapAngKick[0]), 0 },
+{ PSF(weapAngKick[1]), 0 },
+{ PSF(weapAngKick[2]), 0 },//zcm
+
+{ PSF(viewangKick[0]), 0 },
+{ PSF(viewangKick[1]), 0 },
+{ PSF(viewangKick[2]), 0 },//zcm
+
+{ PSF(viewPosSpread[0]), 0 },
+{ PSF(viewPosSpread[1]), 0 },
+{ PSF(viewPosSpread[2]), 0 },//zcm
+
+{ PSF(weapPosSpread[0]), 0 },
+{ PSF(weapPosSpread[1]), 0 },
+{ PSF(weapPosSpread[2]), 0 },//zcm
+
+{ PSF(hmdAngles[0]), 0 },
+{ PSF(hmdAngles[1]), 0 },
+{ PSF(hmdAngles[2]), 0 },
+{ PSF(hmdAngles[3]), 0 }, //wwcs
+
+{ PSF(weaponOffset[0]), 0 },
+{ PSF(weaponOffset[1]), 0 }, 
+{ PSF(weaponOffset[2]), 0 },//zcm
+
+{ PSF(weapAngLerpFrac), 0 },
+{ PSF(viewAngLerpFrac), 0 },
+{ PSF(weapPosLerpFrac), 0 },
+{ PSF(viewPosLerpFrac), 0 },
+
+{ PSF(maxSightsGap), 0 },
+{ PSF(maxBaseGap), 0 },
+{ PSF(gapLerp), 0 },
+
+{ PSF(lastStance), 0 },
+
+{ PSF(pm_weapFlags), 16 },
+
+{ PSF(oldAngles[0]), 0 },
+{ PSF(oldAngles[1]), 0 },
+{ PSF(oldAngles[2]), 0 },//zcm
+ 
+//{ PSF(hand), 8 },
+{ PSF(switchingParent), 0 },
+{ PSF(swapGap[0]), 16 },
+{ PSF(swapGap[1]), 16 },
+
+{ PSF(module), -8 },
+{ PSF(zoomed), -8 }
+
+//that was interesting. when last stance's number was 8 i couldn't lerp it properly when set to 0 i could. yup confirmed
 };
 
 /*

@@ -2007,7 +2007,7 @@ int AINode_Battle_Fight(bot_state_t *bs) {
 	//if there is another better enemy
 	if (BotFindEnemy(bs, bs->enemy)) {
 #ifdef DEBUG
-		BotAI_Print(PRT_MESSAGE, "found new better enemy\n");
+		//BotAI_Print(PRT_MESSAGE, "found new better enemy\n");
 #endif
 	}
 	//if no enemy
@@ -2323,7 +2323,7 @@ int AINode_Battle_Retreat(bot_state_t *bs) {
 	//if there is another better enemy
 	if (BotFindEnemy(bs, bs->enemy)) {
 #ifdef DEBUG
-		BotAI_Print(PRT_MESSAGE, "found new better enemy\n");
+		//BotAI_Print(PRT_MESSAGE, "found new better enemy\n");
 #endif
 	}
 	//

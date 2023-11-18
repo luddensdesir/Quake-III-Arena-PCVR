@@ -589,6 +589,72 @@ void SV_ClipMoveToEntities( moveclip_t *clip ) {
 }
 
 
+
+/*
+==================
+SV_PlayerTrace
+
+Moves the given mins/maxs volume through the world from start to end.
+passEntityNum and entities owned by passEntityNum are explicitly not checked.
+==================
+*/
+void SV_PlayerTrace( trace_t *results, const vec3_t start, vec3_t mins, vec3_t maxs, const vec3_t end, int passEntityNum, int contentmask, vec3_t * body, const vec3_t playerOrigin, const vec3_t viewAngles, int capsule ) {
+	moveclip_t	clip;
+	int			i;
+	clipHandle_t ch;
+
+	if ( !mins ) {
+		mins = vec3_origin;
+	}
+	if ( !maxs ) {
+		maxs = vec3_origin;
+	}
+
+	Com_Memset ( &clip, 0, sizeof ( moveclip_t ) );
+
+	// clip to world
+
+	ch = 0;
+
+	//CM_TransformedPlayerBoxTrace ( &clip.trace, start, end, mins, maxs, ch, contentmask, body, playerOrigin, viewAngles, capsule );
+	CM_Trace( &clip.trace, start, end, mins, maxs, 0, vec3_origin, contentmask, capsule, NULL );
+	//CM_TracePlayer( &clip.trace, start, end, mins, maxs, 0, vec3_origin, contentmask, body, capsule, NULL );
+
+	clip.trace.entityNum = clip.trace.fraction != 1.0 ? ENTITYNUM_WORLD : ENTITYNUM_NONE;
+	if ( clip.trace.fraction == 0 ) {
+		*results = clip.trace;
+		return;		// blocked immediately by the world
+	}
+
+	clip.contentmask = contentmask;
+	clip.start = start;
+//	VectorCopy( clip.trace.endpos, clip.end );
+	VectorCopy( end, clip.end );
+	clip.mins = mins;
+	clip.maxs = maxs;
+	clip.passEntityNum = passEntityNum;
+	clip.capsule = capsule;
+
+	// create the bounding box of the entire move
+	// we can limit it to the part of the move not
+	// already clipped off by the world, which can be
+	// a significant savings for line of sight and shot traces
+	for ( i=0 ; i<3 ; i++ ) {
+		if ( end[i] > start[i] ) {
+			clip.boxmins[i] = clip.start[i] + clip.mins[i] - 1;
+			clip.boxmaxs[i] = clip.end[i] + clip.maxs[i] + 1;
+		} else {
+			clip.boxmins[i] = clip.end[i] + clip.mins[i] - 1;
+			clip.boxmaxs[i] = clip.start[i] + clip.maxs[i] + 1;
+		}
+	}
+
+	// clip to other solid entities
+	SV_ClipMoveToEntities ( &clip );
+
+	*results = clip.trace;
+}
+
 /*
 ==================
 SV_Trace

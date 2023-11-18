@@ -23,6 +23,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "g_local.h"
 
+#include "bg_promode.h" // CPM
+ 
 level_locals_t	level;
 
 typedef struct {
@@ -39,6 +41,13 @@ gentity_t		g_entities[MAX_GENTITIES];
 gclient_t		g_clients[MAX_CLIENTS];
 
 vmCvar_t	g_gametype;
+
+vmCvar_t	g_pro_mode; // CPM: The overall CPM toggle
+
+vmCvar_t	g_allowGrapple;
+vmCvar_t	g_grappleSpeed;
+vmCvar_t	g_grapplePull;
+
 vmCvar_t	g_dmflags;
 vmCvar_t	g_fraglimit;
 vmCvar_t	g_timelimit;
@@ -99,6 +108,12 @@ vmCvar_t	g_proxMineTimeout;
 static cvarTable_t		gameCvarTable[] = {
 	// don't override the cheat state set by the system
 	{ &g_cheats, "sv_cheats", "", 0, 0, qfalse },
+
+	{ &g_pro_mode, "g_pro_mode", "0", CVAR_SERVERINFO, 0, qtrue  }, // CPM: The overall CPM Toggle
+	
+	{ &g_allowGrapple, "g_allowGrapple", "1", 0, 0, qtrue  },
+	{ &g_grappleSpeed, "g_grappleSpeed", "1600", 0, 0, qtrue  },
+	{ &g_grapplePull, "g_grapplePull", "800", 0, 0, qtrue  },
 
 	// noset vars
 	{ NULL, "gamename", GAMEVERSION , CVAR_SERVERINFO | CVAR_ROM, 0, qfalse  },
@@ -344,8 +359,37 @@ void G_RegisterCvars( void ) {
 	for ( i = 0, cv = gameCvarTable ; i < gameCvarTableSize ; i++, cv++ ) {
 		trap_Cvar_Register( cv->vmCvar, cv->cvarName,
 			cv->defaultString, cv->cvarFlags );
-		if ( cv->vmCvar )
+		if ( cv->vmCvar ){
 			cv->modificationCount = cv->vmCvar->modificationCount;
+		}
+
+		// CPM: Detect if g_pro_mode has been changed
+		if (!strcmp(cv->cvarName,"g_pro_mode"))
+		{
+			// Update all settings
+			CPM_UpdateSettings((g_pro_mode.integer) ?
+				((g_gametype.integer == GT_TEAM) ? 2 : 1) : 0);
+
+			// Set the config string (so clients will be updated)
+			trap_SetConfigstring(CS_PRO_MODE, va("%d", g_pro_mode.integer));
+
+			// Update all pro mode-dependent server-side cvars					
+			if (g_pro_mode.integer)
+			{
+				trap_Cvar_Set("g_quadfactor", "4" ); // pro mode default
+				trap_Cvar_Set("g_forcerespawn", "3" );
+				trap_Cvar_Set("g_weaponrespawn", "15" );
+				// we'll add more stuff here later
+			}
+			else
+			{
+				trap_Cvar_Set("g_quadfactor", "3" ); // q3 default
+				trap_Cvar_Set("g_forcerespawn", "20" );
+				trap_Cvar_Set("g_weaponrespawn", "5" );
+			}
+		}
+		// !CPM
+
 
 		if (cv->teamShader) {
 			remapped = qtrue;
@@ -418,7 +462,16 @@ void G_InitGame( int levelTime, int randomSeed, int restart ) {
 
 	G_ProcessIPBans();
 
-	G_InitMemory();
+	G_InitMemory(); 
+
+	// CPM: Initialize
+	// Update all settings
+	CPM_UpdateSettings((g_pro_mode.integer) ?
+		((g_gametype.integer == GT_TEAM) ? 2 : 1) : 0);
+
+	// Set the config string
+	trap_SetConfigstring(CS_PRO_MODE, va("%d", g_pro_mode.integer));
+	// !CPM 
 
 	// set some level globals
 	memset( &level, 0, sizeof( level ) );

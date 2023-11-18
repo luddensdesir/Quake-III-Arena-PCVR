@@ -23,6 +23,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #include "g_local.h"
 
 #define	MISSILE_PRESTEP_TIME	50
+#define	PLASMA_PRESTEP_TIME 0
+//#define	MISSILE_PRESTEP_TIME	-75
 
 /*
 ================
@@ -365,6 +367,8 @@ void G_MissileImpact( gentity_t *ent, trace_t *trace ) {
 		vec3_t v;
 
 		nent = G_Spawn();
+		if (!nent) return;	// JUHOX BUGFIX
+		nent->s.weapon = WP_GRAPPLING_HOOK;	// JUHOX BUGFIX
 		if ( other->takedamage && other->client ) {
 
 			G_AddEvent( nent, EV_MISSILE_HIT, DirToByte( trace->plane.normal ) );
@@ -541,9 +545,9 @@ gentity_t *fire_plasma (gentity_t *self, vec3_t start, vec3_t dir) {
 	bolt->target_ent = NULL;
 
 	bolt->s.pos.trType = TR_LINEAR;
-	bolt->s.pos.trTime = level.time - MISSILE_PRESTEP_TIME;		// move a bit on the very first frame
+	bolt->s.pos.trTime = level.time - PLASMA_PRESTEP_TIME;		// move a bit on the very first frame
 	VectorCopy( start, bolt->s.pos.trBase );
-	VectorScale( dir, 2000, bolt->s.pos.trDelta );
+	VectorScale( dir, 5000, bolt->s.pos.trDelta );
 	SnapVector( bolt->s.pos.trDelta );			// save net bandwidth
 
 	VectorCopy (start, bolt->r.currentOrigin);
@@ -566,7 +570,7 @@ gentity_t *fire_grenade (gentity_t *self, vec3_t start, vec3_t dir) {
 
 	bolt = G_Spawn();
 	bolt->classname = "grenade";
-	bolt->nextthink = level.time + 2500;
+	bolt->nextthink = level.time + 5000;
 	bolt->think = G_ExplodeMissile;
 	bolt->s.eType = ET_MISSILE;
 	bolt->r.svFlags = SVF_USE_CURRENT_ORIGIN;
@@ -574,18 +578,26 @@ gentity_t *fire_grenade (gentity_t *self, vec3_t start, vec3_t dir) {
 	bolt->s.eFlags = EF_BOUNCE_HALF;
 	bolt->r.ownerNum = self->s.number;
 	bolt->parent = self;
-	bolt->damage = 100;
-	bolt->splashDamage = 100;
-	bolt->splashRadius = 150;
+	bolt->damage = 30;
+	//bolt->splashDamage = 100;
+	bolt->splashDamage = 20;
+	//bolt->splashRadius = 250;
+	bolt->splashRadius = 50;
 	bolt->methodOfDeath = MOD_GRENADE;
 	bolt->splashMethodOfDeath = MOD_GRENADE_SPLASH;
 	bolt->clipmask = MASK_SHOT;
 	bolt->target_ent = NULL;
 
 	bolt->s.pos.trType = TR_GRAVITY;
-	bolt->s.pos.trTime = level.time - MISSILE_PRESTEP_TIME;		// move a bit on the very first frame
+	bolt->s.pos.trTime = level.time/* - MISSILE_PRESTEP_TIME*/;		// move a bit on the very first frame
 	VectorCopy( start, bolt->s.pos.trBase );
-	VectorScale( dir, 700, bolt->s.pos.trDelta );
+	VectorScale( dir, 20000, bolt->s.pos.trDelta );
+
+	VectorAdd(bolt->s.pos.trDelta, self->client->ps.velocity , bolt->s.pos.trDelta); //ZCM additive velocity
+	 
+	//if i stored the weapon velocity I could actually add that, too
+	//Com_Printf("w: %f, %f, %f\n", self->client->ps.velocity[0], self->client->ps.velocity[1], self->client->ps.velocity[2]);
+
 	SnapVector( bolt->s.pos.trDelta );			// save net bandwidth
 
 	VectorCopy (start, bolt->r.currentOrigin);
@@ -667,6 +679,7 @@ gentity_t *fire_rocket (gentity_t *self, vec3_t start, vec3_t dir) {
 	bolt->s.pos.trTime = level.time - MISSILE_PRESTEP_TIME;		// move a bit on the very first frame
 	VectorCopy( start, bolt->s.pos.trBase );
 	VectorScale( dir, 900, bolt->s.pos.trDelta );
+	VectorScale( dir, 1800, bolt->s.pos.trDelta );
 	SnapVector( bolt->s.pos.trDelta );			// save net bandwidth
 	VectorCopy (start, bolt->r.currentOrigin);
 
@@ -696,11 +709,17 @@ gentity_t *fire_grapple (gentity_t *self, vec3_t start, vec3_t dir) {
 	hook->parent = self;
 	hook->target_ent = NULL;
 
-	hook->s.pos.trType = TR_LINEAR;
-	hook->s.pos.trTime = level.time - MISSILE_PRESTEP_TIME;		// move a bit on the very first frame
-	hook->s.otherEntityNum = self->s.number; // use to match beam in client
+	hook->s.pos.trType = TR_GRAVITY;
+	hook->s.pos.trTime = level.time/* - MISSILE_PRESTEP_TIME*/;		// move a bit on the very first frame
 	VectorCopy( start, hook->s.pos.trBase );
-	VectorScale( dir, 800, hook->s.pos.trDelta );
+	VectorScale( dir, 1200, hook->s.pos.trDelta );
+
+	VectorAdd(hook->s.pos.trDelta, self->client->ps.velocity , hook->s.pos.trDelta); //ZCM additive velocity
+
+	//hook->s.pos.trTime = level.time - MISSILE_PRESTEP_TIME;		// move a bit on the very first frame
+	//hook->s.otherEntityNum = self->s.number; // use to match beam in client
+	//VectorCopy( start, hook->s.pos.trBase );
+	//VectorScale( dir, 800, hook->s.pos.trDelta );
 	SnapVector( hook->s.pos.trDelta );			// save net bandwidth
 	VectorCopy (start, hook->r.currentOrigin);
 
@@ -709,6 +728,93 @@ gentity_t *fire_grapple (gentity_t *self, vec3_t start, vec3_t dir) {
 	return hook;
 }
 
+gentity_t *fire_grapple2 (gentity_t *self, vec3_t start, vec3_t dir) {
+	gentity_t	*hook;
+#if GRAPPLE_ROPE
+	float speed;	// JUHOX
+#endif
+
+	Weapon_HookFree(self->client->hook);	// JUHOX
+	self->client->hook = NULL;				// JUHOX
+
+	VectorNormalize (dir);
+
+	hook = G_Spawn();
+	if (!hook) return NULL;	// JUHOX BUGFIX
+	hook->classname = "hook";
+	hook->nextthink = level.time + /*10000*/20000;	// JUHOX
+	hook->think = Weapon_HookFree;
+	hook->s.eType = ET_MISSILE;
+	hook->r.svFlags = SVF_USE_CURRENT_ORIGIN;
+	hook->s.weapon = WP_GRAPPLING_HOOK;
+	hook->r.ownerNum = self->s.number;
+	hook->methodOfDeath = MOD_GRAPPLE;
+	hook->clipmask = MASK_SHOT;
+	hook->parent = self;
+	hook->target_ent = NULL;
+	//hook->damage = 25;	// -JUHOX
+#if GRAPPLE_ROPE	// JUHOX: the hooks needs some extension
+	VectorSet(hook->r.mins, -ROPE_ELEMENT_SIZE, -ROPE_ELEMENT_SIZE, -ROPE_ELEMENT_SIZE);
+	VectorSet(hook->r.maxs, ROPE_ELEMENT_SIZE, ROPE_ELEMENT_SIZE, ROPE_ELEMENT_SIZE);
+#endif
+
+	// JUHOX: let hook fly like a grenade
+#if !GRAPPLE_ROPE
+	hook->s.pos.trType = TR_LINEAR;
+#else
+	switch (g_grapple.integer) {
+	case HM_classic:
+		hook->s.pos.trType = TR_LINEAR;
+		speed = 800;
+		break;
+	case HM_tool:
+	default:
+		hook->s.pos.trType = TR_GRAVITY;
+		speed = self->client->offHandHook? 800 : 1200;
+		break;
+	case HM_anchor:
+		hook->s.pos.trType = self->client->offHandHook? TR_GRAVITY : TR_LINEAR;
+		speed = self->client->offHandHook? 800 : 2000;
+		break;
+	case HM_combat:
+		hook->s.pos.trType = TR_LINEAR;
+		speed = 2000;
+		break;
+	}
+#endif
+	hook->s.pos.trTime = level.time - MISSILE_PRESTEP_TIME;		// move a bit on the very first frame
+	hook->s.otherEntityNum = self->s.number; // use to match beam in client
+	VectorCopy( start, hook->s.pos.trBase );
+	// JUHOX: hook speed made variable
+#if !GRAPPLE_ROPE
+	VectorScale( dir, 800, hook->s.pos.trDelta );
+#else
+	VectorScale(dir, speed, hook->s.pos.trDelta);
+#endif
+	SnapVector( hook->s.pos.trDelta );			// save net bandwidth
+	VectorCopy (start, hook->r.currentOrigin);
+
+	self->client->hook = hook;
+
+	// JUHOX: insert first rope element
+#if GRAPPLE_ROPE
+	switch (g_grapple.integer) {
+	case HM_classic:
+		break;
+	default:
+		self->client->numRopeElements = 1;
+		VectorCopy(start, self->client->ropeElements[0].pos);
+		VectorCopy(hook->s.pos.trDelta, self->client->ropeElements[0].velocity);
+		break;
+	}
+#endif
+
+#if GRAPPLE_ROPE
+	self->client->lastTimeWinded = level.time;	// JUHOX
+#endif
+
+	return hook;
+}
 
 #ifdef MISSIONPACK
 /*

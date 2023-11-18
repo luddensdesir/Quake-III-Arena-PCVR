@@ -269,7 +269,15 @@ void GibEntity( gentity_t *self, int killer ) {
 body_die
 ==================
 */
-void body_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath ) {
+void body_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath, vec3_t dir, vec3_t point ) {
+
+	//if(dir){
+	//	Com_Printf( "%f  %f  %f\n", dir[0], dir[1], dir[2] );
+	//}
+	//if(point){
+	//	Com_Printf( "%f  %f  %f\n", point[0], point[1], point[2] );
+	//}
+
 	if ( self->health > GIB_HEALTH ) {
 		return;
 	}
@@ -436,7 +444,7 @@ void CheckAlmostScored( gentity_t *self, gentity_t *attacker ) {
 player_die
 ==================
 */
-void player_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath ) {
+void player_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int damage, int meansOfDeath, vec3_t dir, vec3_t point) {
 	gentity_t	*ent;
 	int			anim;
 	int			contents;
@@ -621,9 +629,25 @@ void player_die( gentity_t *self, gentity_t *inflictor, gentity_t *attacker, int
 
 	self->s.loopSound = 0;
 
+
+	//inflictor
+	//Com_Printf( "COWS\n");
+
+	if(dir){
+		//Com_Printf( "DIR: %f  %f  %f\n", dir[0], dir[1], dir[2]);
+		//VectorCopy(dir, self->s.origin3);
+	}
+
+	if(point){
+		//DOESNT WORK IF EXPLOSIVE DIRECT HIT
+		//Com_Printf( "POINT: %f  %f  %f\n", point[0], point[1], point[2]);
+		//VectorCopy(point, self->s.origin4);
+	}
+
+
 	self->r.maxs[2] = -8;
 
-	// don't allow respawn until the death anim is done
+	// don't allow respawn until the death anim is 22
 	// g_forcerespawn may force spawning at some later time
 	self->client->respawnTime = level.time + 1700;
 
@@ -988,7 +1012,7 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 	// always give half damage if hurting self
 	// calculated after knockback, so rocket jumping works
 	if ( targ == attacker) {
-		damage *= 0.5;
+		//damage *= 0.5;	//zcm explosives no longer do partial self damage
 	}
 
 	if ( damage < 1 ) {
@@ -1043,6 +1067,19 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 	}
 
 	// do the damage
+	//if(point){
+	//	Com_Printf("%f  ", point[0] );
+	//	Com_Printf("%f  ", point[1] );
+	//	Com_Printf("%f\n", point[2] );
+	//}
+	//
+	//if(dir){
+	//	Com_Printf("%f  ", dir[0] );
+	//	Com_Printf("%f  ", dir[1] );
+	//	Com_Printf("%f\n", dir[2] );
+	//}
+	//Com_Printf("\n" );
+
 	if (take) {
 		targ->health = targ->health - take;
 		if ( targ->client ) {
@@ -1057,7 +1094,8 @@ void G_Damage( gentity_t *targ, gentity_t *inflictor, gentity_t *attacker,
 				targ->health = -999;
 
 			targ->enemy = attacker;
-			targ->die (targ, inflictor, attacker, take, mod);
+			targ->die (targ, inflictor, attacker, take, mod, dir, point);
+			//targ->die (targ, inflictor, attacker, take, mod);
 			return;
 		} else if ( targ->pain ) {
 			targ->pain (targ, attacker, take);
